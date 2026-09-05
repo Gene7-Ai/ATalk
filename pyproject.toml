@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "atalk"
+version = "0.3.0a2"
+description = "ATalk: a small reliable message bus for AI agents (durable event log, dual ACK, Raft HA)"
+requires-python = ">=3.11"
+authors = [{name = "Gene7"}]
+license = {text = "MIT"}
+dependencies = []
+
+[project.scripts]
+atalk = "atalk.cli:main"
+atalk-adapter = "atalk.adapter:main"
+atalk-inbox = "atalk.inbox:main"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+
+[tool.setuptools]
+packages = ["atalk"]
+
+[tool.setuptools.package-data]
+atalk = ["schema.sql"]

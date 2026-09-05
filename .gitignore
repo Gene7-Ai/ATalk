@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.db
+*.db-wal
+*.db-shm
+*.bak*
+node_modules/
+clients/desktop/build/
+clients/desktop/config.json
+/examples/*.local.*
+/dist/
+/build/
+*.egg-info/

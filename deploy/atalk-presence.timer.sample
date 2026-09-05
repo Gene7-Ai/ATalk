@@ -1,0 +1,7 @@
+[Unit]
+Description=aTalk presence every 5min
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,9 @@
+{
+  "_comment": "Whitelist for tools/rescue_executor.py. Only the services, logs and endpoints listed here can be acted on when running recovery on behalf of a peer. Keep it minimal and read-only where possible.",
+  "services": {},
+  "logs": ["/var/log/atalk/example.log"],
+  "endpoints": {},
+  "endpoint_state": "/var/lib/atalk/rescue-endpoint-state.json",
+  "report_to": "owner-agent",
+  "audit_log": "/var/lib/atalk/rescue-executor-audit.jsonl"
+}

@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>aTalk core self-test</title>
+<style>body{font:14px/1.5 -apple-system,system-ui,sans-serif;margin:20px;color:#222;max-width:720px}input,button{font:inherit;padding:6px 8px}pre{background:#f6f6f6;padding:8px;overflow:auto;max-height:50vh;font-size:12px}.row{margin:8px 0}</style>
+</head>
+<body>
+<h2>aTalk core self-test</h2>
+<div class="row" id="login"><input id="me" placeholder="peer id (e.g. alice)" size="10"> <input id="tok" placeholder="token" size="30" type="password"> <button id="go">Sign in</button></div>
+<div class="row">Status: <b id="st">init</b> · cursor <span id="cur">0</span> · local events <span id="n">0</span> · peers <span id="np">0</span> <button id="drain">Drain once</button> <button id="out">Sign out & clear</button></div>
+<div class="row"><input id="to" placeholder="to" size="8"> <input id="txt" placeholder="text" size="30"> <button id="send">Send</button></div>
+<pre id="log"></pre>
+<script type="module">
+import { AtalkClient } from '/app/core.js';
+const $ = s => document.querySelector(s); const log = (...a) => { $('#log').textContent = a.map(x => typeof x === 'string' ? x : JSON.stringify(x)).join(' ') + '\n' + $('#log').textContent.slice(0, 6000); };
+const c = new AtalkClient();
+c.on((type, d) => { if (type === 'status') { $('#st').textContent = d.status; $('#cur').textContent = c.cursor; } if (type === 'events') log('new events', d.length, d.map(e => `#${e.id} ${e.source}→${e.target} ${e.type}`).join(' | ')); if (type === 'outbox') log('outbox', d.state, d.event_id.slice(0, 8)); refresh(); });
+async function refresh() { const ps = await c.peers(); $('#np').textContent = ps.length; $('#n').textContent = await new Promise(r => { const q = c.db.transaction('events').objectStore('events').count(); q.onsuccess = () => r(q.result); q.onerror = () => r('?'); }); $('#cur').textContent = c.cursor; }
+const ok = await c.init(); log('init', ok ? `signed in as ${c.me}` : 'not signed in'); if (ok) { $('#login').style.display = 'none'; c.run(); }
+$('#go').onclick = async () => { try { await c.login($('#me').value.trim(), $('#tok').value.trim()); $('#login').style.display = 'none'; log('signed in', c.me); c.run(); } catch (e) { log('sign-in failed', String(e)); } };
+$('#drain').onclick = () => c.drain().then(n => log('drained', n)).catch(e => log('drain failed', String(e)));
+$('#out').onclick = async () => { c.stop(); await c.logout(); log('signed out, store cleared'); location.reload(); };
+$('#send').onclick = () => c.send($('#to').value.trim(), $('#txt').value.trim()).then(i => log('sent', i.state)).catch(e => log('send failed', String(e)));
+</script>
+</body>
+</html>

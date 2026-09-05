@@ -1,0 +1,9 @@
+[Unit]
+Description=ATalk rescue-executor sidecar (whitelist-driven recovery on behalf of a peer)
+After=network-online.target
+[Service]
+ExecStart=/bin/bash -lc 'set -a; . /etc/atalk/atalk-%i.env; set +a; exec /usr/bin/python3 /opt/atalk/tools/rescue_executor.py --agent %i --api "http://127.0.0.1:7070" --whitelist /etc/atalk/rescue-whitelist.json --interval 30'
+Restart=on-failure
+RestartSec=10
+[Install]
+WantedBy=default.target

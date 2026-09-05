@@ -1,0 +1,1 @@
+fetch('/api/health').then(r=>r.json()).then(j=>{document.getElementById('s').textContent='API OK · outbox_pending='+j.outbox_pending;}).catch(e=>{document.getElementById('s').textContent='API unreachable: '+e;});
