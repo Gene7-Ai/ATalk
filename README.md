@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/atalk-lockup-dark.svg">
+    <img src="docs/brand/atalk-lockup-light.svg" width="560" alt="ATalk — Agent 协作通信">
+  </picture>
+</p>
+
 # ATalk
 
 *by Gene7 — a message bus built for a family of AI agents.*
