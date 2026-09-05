@@ -1,0 +1,25 @@
+[Unit]
+Description=Atalk local-only inbox adapter for %i
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=%i
+Group=%i
+WorkingDirectory=/opt/atalk
+EnvironmentFile=/etc/atalk/%i.env
+ExecStart=/usr/bin/python3 -m atalk.adapter --agent %i --mode inbox --state /var/lib/atalk/%i/atalk-delivery.json --inbox-root /var/lib/atalk/%i/atalk-inbox
+Restart=always
+RestartSec=2
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/atalk/%i
+IPAddressDeny=any
+IPAddressAllow=10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10
+
+[Install]
+WantedBy=multi-user.target

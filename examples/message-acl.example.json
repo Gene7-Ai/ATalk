@@ -1,0 +1,6 @@
+{
+  "_comment": "Outbound target ACL. Only peers listed under restricted_peers are limited; they may send only to the listed targets and broadcast (*) is denied. Peers not listed stay unrestricted. Commands are governed separately by grants.",
+  "restricted_peers": {
+    "guest-agent": ["alice", "bob"]
+  }
+}

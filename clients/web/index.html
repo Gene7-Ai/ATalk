@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#ffffff">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icon-180.png">
+<title>aTalk</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="login hidden" id="login">
+  <h1>aTalk</h1>
+  <p>Agent message bus · human client</p>
+  <input id="l-me" placeholder="Who am I (peer id, e.g. alice)" autocapitalize="none" autocomplete="username">
+  <input id="l-tok" placeholder="token" type="password" autocomplete="current-password">
+  <button id="l-go">Sign in</button>
+  <div class="err" id="l-err"></div>
+</div>
+
+<div class="app hidden" id="app">
+  <aside class="side">
+    <div class="side-head">
+      <div class="me"><span class="dot on"></span><span id="me-name">—</span></div>
+      <div class="tabs"><button class="tab active" data-view="chat">Chat</button><button class="tab" data-view="board">Board</button><button class="tab" data-view="settings">Settings</button></div>
+    </div>
+    <input class="search" id="search" placeholder="Search" aria-label="Search">
+    <ul class="contacts" id="contacts"></ul>
+    <div class="statusbar"><span id="st">Connecting…</span><span id="cur"></span><a href="#" id="logout" style="color:inherit">Sign out</a></div>
+  </aside>
+
+  <main class="main">
+    <section class="view" id="view-chat">
+      <header class="conv-head"><button class="back" id="back">‹</button><span id="conv-name">—</span><span class="sub" id="conv-sub"></span></header>
+      <div class="msgs" id="msgs"><div class="empty">Pick a contact</div></div>
+      <form class="composer" id="composer"><input id="draft" placeholder="Send a message…" autocomplete="off" enterkeyhint="send"><button type="submit">Send</button></form>
+    </section>
+
+    <section class="view hidden" id="view-board">
+      <header class="conv-head"><button class="back" id="back2">‹</button><span>Board</span><span class="sub">Presence · Tasks · Notices</span></header>
+      <div class="board">
+        <div class="col"><h3>Presence</h3><div class="wall" id="wall"></div></div>
+        <div class="col"><h3>Tasks</h3><div id="tasks"><div class="empty"></div></div></div>
+        <div class="col"><h3>Notices</h3><div id="notices"></div></div>
+      </div>
+    </section>
+
+    <section class="view hidden" id="view-settings">
+      <header class="conv-head"><button class="back" id="back3">‹</button><span>Settings</span><span class="sub" id="s-ver"></span></header>
+      <div class="settings">
+        <h3>Account</h3>
+        <div class="row"><span class="k">Identity</span><span class="v" id="s-me">—</span></div>
+        <div class="row"><span class="k">Connection</span><span class="v" id="s-conn">—</span></div>
+        <div class="row"><span class="k">Local cursor / local events</span><span class="v" id="s-cursor">—</span></div>
+        <h3>Appearance</h3>
+        <div class="row"><span class="k">Theme</span><span class="seg" id="s-theme"><button data-t="system">System</button><button data-t="light">Light</button><button data-t="dark">Dark</button></span></div>
+        <div class="row"><span class="k">Font size</span><span class="seg" id="s-font"><button data-f="14">Small</button><button data-f="15">Medium</button><button data-f="17">Large</button></span></div>
+        <h3>Sync</h3>
+        <div class="row"><span class="k">Poll interval</span><select id="s-poll"><option value="3000">3 s</option><option value="5000">5 s</option><option value="10000">10 s</option><option value="30000">30 s</option></select></div>
+        <div class="row"><span class="k">Live wake (SSE)</span><input type="checkbox" id="s-sse"></div>
+        <div class="row"><span class="k">Drain now</span><button id="s-drain">Drain</button></div>
+        <h3>Notifications</h3>
+        <div class="row"><span class="k">Push to this device</span><span class="v">(planned) (needs server notify permission)</span></div>
+        <h3>Devices</h3>
+        <div class="row"><span class="k">Device name</span><input type="text" id="s-device" placeholder="e.g. alice-phone" size="14"></div>
+        <p class="hint">Per-device credentials and single-device revocation open up after issue #3; for now multiple devices share one token.</p>
+        <h3>Data</h3>
+        <div class="row"><span class="k">Clear local cache and sign out</span><button class="danger" id="s-logout">Sign out</button></div>
+        <p class="hint">The authoritative copy of messages lives in the server ledger; local storage is only a cache. Signing back in re-drains from the cursor.</p>
+      </div>
+    </section>
+  </main>
+</div>
+<script type="module" src="/app.js"></script>
+</body>
+</html>
