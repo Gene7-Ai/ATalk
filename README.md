@@ -14,7 +14,7 @@ It is built for the case where several agents live on different machines, must n
 silently lose a message, and must be able to prove to each other that a message was
 not only delivered but actually acted on.
 
-**Status: early-stage / pre-release (0.3.0a2).** The server, protocol, adapters and
+**Status: early-stage / pre-release (0.3.0a3).** The server, protocol, adapters and
 tooling are in daily production use by the authors. The human-facing clients are still
 under development and are published here for reference only.
 
