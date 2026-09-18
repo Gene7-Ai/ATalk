@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import argparse
+import errno
 import json
 import logging
 import os
 import queue
+import sqlite3
+import tempfile
 import threading
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -90,6 +94,55 @@ class RequestTooLarge(Exception):
     """Raised when a request body exceeds the configured maximum size."""
 
 
+def sqlite_primary_code(exc: BaseException) -> int | None:
+    code = getattr(exc, "sqlite_errorcode", None)
+    return (int(code) & 0xFF) if isinstance(code, int) else None
+
+
+def probe_storage_errno(store: AtalkStorage) -> int | None:
+    """Probe the SQLite directory without exposing its path to the caller.
+
+    Project-quota exhaustion is surfaced by SQLite as SQLITE_IOERR, not
+    SQLITE_FULL. A tiny sibling write lets us distinguish ENOSPC/EDQUOT from a
+    genuine EIO. The temporary file is always removed when creation succeeded.
+    """
+    db_path = getattr(store, "db_path", None)
+    if db_path is None:
+        return None
+    probe_path: str | None = None
+    try:
+        fd, probe_path = tempfile.mkstemp(prefix=".atalk-write-probe-", dir=str(Path(db_path).parent))
+        try:
+            os.write(fd, b"\0" * 4096)
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+    except OSError as probe_exc:
+        return probe_exc.errno
+    finally:
+        if probe_path is not None:
+            try:
+                os.unlink(probe_path)
+            except OSError:
+                pass
+    return None
+
+
+def classify_storage_error(exc: BaseException, store: AtalkStorage) -> tuple[str, int, int | None] | None:
+    """Return (public error, HTTP status, probe errno) for storage failures."""
+    if not isinstance(exc, sqlite3.OperationalError):
+        return None
+    primary = sqlite_primary_code(exc)
+    if primary == sqlite3.SQLITE_FULL or "database or disk is full" in str(exc).lower():
+        return ("storage_full", 507, None)
+    if primary == sqlite3.SQLITE_IOERR or "disk i/o error" in str(exc).lower():
+        probe_errno = probe_storage_errno(store)
+        if probe_errno in {errno.ENOSPC, errno.EDQUOT}:
+            return ("storage_full", 507, probe_errno)
+        return ("storage_io_error", 503, probe_errno)
+    return None
+
+
 class WakeHub:
     def __init__(self):
         self._lock = threading.Lock()
@@ -146,9 +199,19 @@ class AtalkHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
         qs = parse_qs(parsed.query)
-        if parsed.path == "/health":
+        if parsed.path in {"/health", "/readiness"}:
             snapshot = self.server.store.health_snapshot()
-            snapshot.update({"ok": True, "wake_streams": self.server.wake.connected(), "wake_streams_scope": "node-local"})
+            storage = self.server.storage_health()
+            snapshot.update({
+                "ok": storage["ok"],
+                "status": "ok" if storage["ok"] else "degraded",
+                "storage": storage,
+                "wake_streams": self.server.wake.connected(),
+                "wake_streams_scope": "node-local",
+            })
+            if parsed.path == "/readiness":
+                snapshot["ready"] = storage["ok"]
+                return self.send_json(snapshot, status=200 if storage["ok"] else 503)
             return self.send_json(snapshot)
         if parsed.path == "/events":
             unknown = sorted(set(qs) - {"target", "since_id", "limit", "state"})
@@ -223,6 +286,7 @@ class AtalkHandler(BaseHTTPRequestHandler):
                     peer, body["device_label"], token=body.get("token"),
                     scope=body.get("scope", "full"), actor=peer,
                 )
+                self.server.mark_storage_success()
                 return self.send_json(result, status=201)
             if parsed.path == "/device-tokens/revoke":
                 peer = body["peer_id"]
@@ -231,9 +295,9 @@ class AtalkHandler(BaseHTTPRequestHandler):
                 rows = self.server.store.list_device_tokens(peer)
                 if body["token_id"] not in {row["token_id"] for row in rows}:
                     raise PermissionError("token does not belong to authenticated peer")
-                return self.send_json(
-                    self.server.store.revoke_device_token(body["token_id"], actor=peer)
-                )
+                result = self.server.store.revoke_device_token(body["token_id"], actor=peer)
+                self.server.mark_storage_success()
+                return self.send_json(result)
             if parsed.path == "/events":
                 # Reject poison inputs at the boundary: source/target/type must be
                 # non-empty strings and payload, when present, an object. A non-dict
@@ -279,6 +343,8 @@ class AtalkHandler(BaseHTTPRequestHandler):
                     source_ref=body.get("source_ref"),
                     token=token,
                 )
+                if not is_retry:
+                    self.server.mark_storage_success()
                 item = event_to_dict(event)
                 wake_item = {"kind": "event", "event": item}
                 if event.target == "*":
@@ -292,6 +358,7 @@ class AtalkHandler(BaseHTTPRequestHandler):
                 if self.server.store.auth_required() and self.server.store.token_scope(body["agent_id"], token) != "full":
                     raise PermissionError("agent token rejected")
                 self.server.store.ack(body["event_id"], body["agent_id"], body["ack_type"], body.get("detail"))
+                self.server.mark_storage_success()
                 return self.send_json({"ok": True})
         except EventIdConflict as exc:
             return self.send_error_json(409, f"event_id already used for a different message: {exc}")
@@ -304,6 +371,26 @@ class AtalkHandler(BaseHTTPRequestHandler):
         except (ValueError, json.JSONDecodeError) as exc:
             # Domain/validation errors carry safe, caller-facing messages.
             return self.send_error_json(400, str(exc))
+        except sqlite3.OperationalError as exc:
+            classified = classify_storage_error(exc, self.server.store)
+            if classified is None:
+                logging.exception("unhandled SQLite error in POST %s", parsed.path)
+                return self.send_error_json(500, "internal server error")
+            public_error, status, probe_errno = classified
+            logging.warning(
+                "storage write failure during POST %s: error=%s sqlite_code=%r "
+                "sqlite_name=%r probe_errno=%r",
+                parsed.path,
+                public_error,
+                getattr(exc, "sqlite_errorcode", None),
+                getattr(exc, "sqlite_errorname", None),
+                probe_errno,
+            )
+            self.server.mark_storage_failure(public_error)
+            return self.send_json(
+                {"error": public_error, "retryable": True, "retry_after": 60},
+                status=status,
+            )
         except Exception:
             # Never leak raw internal error text (sqlite/attribute/traceback) to clients.
             logging.exception("unhandled error in POST %s", parsed.path)
@@ -394,6 +481,33 @@ class AtalkHTTPServer(ThreadingHTTPServer):
         self.wake = wake
         self.max_inbox_depth = max(1, int(max_inbox_depth))
         self.message_acl = MessageAcl()
+        self._storage_health_lock = threading.Lock()
+        self._storage_error: str | None = None
+        self._storage_error_since: str | None = None
+
+    def mark_storage_failure(self, error: str) -> None:
+        with self._storage_health_lock:
+            if self._storage_error != error or self._storage_error_since is None:
+                self._storage_error_since = datetime.now(timezone.utc).isoformat()
+            self._storage_error = error
+
+    def mark_storage_full(self) -> None:
+        # Compatibility helper for tests and callers built against the first
+        # readiness candidate.
+        self.mark_storage_failure("storage_full")
+
+    def mark_storage_success(self) -> None:
+        with self._storage_health_lock:
+            self._storage_error = None
+            self._storage_error_since = None
+
+    def storage_health(self) -> dict:
+        with self._storage_health_lock:
+            error = self._storage_error
+            since = self._storage_error_since
+        if error is None:
+            return {"ok": True}
+        return {"ok": False, "error": error, "since": since}
 
 
 def first(qs: dict[str, list[str]], key: str) -> str | None:
