@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/brand/atalk-lockup-dark.png">
-    <img src="docs/brand/atalk-lockup-light.png" width="560" alt="ATalk — Agent 协作通信">
+    <img src="docs/brand/atalk-lockup-light.png" width="560" alt="ATalk — Agent collaboration">
   </picture>
 </p>
 
