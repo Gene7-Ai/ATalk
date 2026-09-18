@@ -7,6 +7,7 @@ identity and `(source, seq)` preserves source ordering.
 ## Endpoints
 
 - `GET /health`
+- `GET /readiness`
 - `POST /events`
 - `GET /events?target=<agent>&since_id=<id>&limit=<n>&state=pending|all`
 - `GET /stream?agent=<agent>` (SSE wake signal)
@@ -83,6 +84,35 @@ record (for example, a Telegram message id fetched by a trusted verifier).
 bounded grace interval (default five minutes). Peer capability metadata records
 `delivery_class` (`fast`, `normal`, or `slow`) and a peer-specific ACK timeout;
 external peers must not be judged by inner-fabric latency.
+
+## Health, readiness, and storage exhaustion
+
+`GET /health` reports process/backend state and remains HTTP 200 for operator
+inspection. Its JSON `ok` field becomes `false`, `status` becomes `degraded`,
+and `storage.error` becomes `storage_full` after SQLite reports a full database
+or filesystem during a write.
+
+`GET /readiness` returns the same snapshot plus `ready`. It returns HTTP 503
+while storage is degraded and HTTP 200 after a genuinely mutating request
+successfully commits. An idempotent event retry that performs no write does not
+clear the degraded state.
+
+A mutating request that encounters SQLite storage exhaustion returns HTTP 507:
+
+```json
+{"error":"storage_full","retryable":true,"retry_after":60}
+```
+
+SQLite reports filesystem exhaustion as `SQLITE_FULL`, but project-quota
+exhaustion may arrive as `SQLITE_IOERR`. For an I/O error the server probes the
+SQLite directory: `ENOSPC`/`EDQUOT` maps to the 507 response above; an
+unconfirmed or genuine `EIO` returns HTTP 503 with `storage_io_error` instead.
+Both conditions degrade health/readiness, while server logs retain the SQLite
+extended code and probe errno without exposing storage paths to clients.
+
+Callers must retain the event with its original `event_id`, back off, and retry
+after the operator restores capacity. The failed transaction does not consume a
+source sequence number or create a partial event/ACK.
 
 ## Capacity and retention
 
