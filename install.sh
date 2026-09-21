@@ -1,8 +1,10 @@
 #!/bin/bash
-# aTalk Community 一键安装（Linux + systemd，Python ≥3.11）。
-#   安装:   curl -fsSL https://atalk.ai/install.sh | sudo bash -s -- [tag]
-#   卸载(保账本): sudo bash install.sh --uninstall      彻底清除(删账本): sudo bash install.sh --purge
-# 做的事: 下载 tar + SHA256SUMS → 校验 → /opt/atalk/<tag> 解包 → 用户 atalk → /var/lib/atalk/atalk.db init(仅首次) → systemd atalk.service 127.0.0.1:7070 → 以 /readiness 200 为成功。
+# ATalk Community one-command installer (Linux + systemd, Python >= 3.11).
+#   Install: curl -fsSL https://atalk.ai/install.sh | sudo bash -s -- [tag]
+#   Uninstall and keep the ledger: sudo bash install.sh --uninstall
+#   Purge including the ledger: sudo bash install.sh --purge
+# Downloads and verifies the release, installs it under /opt/atalk/<tag>,
+# initializes the ledger once, and requires HTTP 200 from /readiness.
 set -euo pipefail
 DL=${ATALK_DL:-https://atalk.ai/dl}; MODE=install; TAG=; TELEMETRY_FLAGS=()
 while [ "$#" -gt 0 ]; do
@@ -15,7 +17,7 @@ while [ "$#" -gt 0 ]; do
   esac
   shift
 done
-TAG=${TAG:-v0.3.0a4}
+TAG=${TAG:-v0.3.0a5}
 [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([a-z][a-z0-9]*|-rc[0-9]+)?$ ]] || { echo "invalid tag: $TAG"; exit 2; }
 [ "$(id -u)" = 0 ] || { echo "run as root"; exit 2; }
 TELEMETRY_ON=0
