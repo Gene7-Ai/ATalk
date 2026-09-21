@@ -92,15 +92,18 @@ inspection. Its JSON `ok` field becomes `false`, `status` becomes `degraded`,
 and `storage.error` becomes `storage_full` after SQLite reports a full database
 or filesystem during a write.
 
-`GET /readiness` returns the same snapshot plus `ready`. It returns HTTP 503
-while storage is degraded and HTTP 200 after a genuinely mutating request
-successfully commits. An idempotent event retry that performs no write does not
-clear the degraded state.
+`GET /readiness` returns the same snapshot plus `ready`. It remains HTTP 200 while
+the ledger is readable, even when writes are degraded, so an orchestrator does not
+restart-loop a readable instance merely because its storage quota is full. It returns
+HTTP 503 only when the ledger cannot be read or the process cannot serve requests.
+`GET /health` also exposes top-level `write_ready`, `storage_used`, and
+`storage_limit` fields. A metadata-only durability probe clears the degraded latch
+after capacity is restored; it does not create an event or ACK.
 
 A mutating request that encounters SQLite storage exhaustion returns HTTP 507:
 
 ```json
-{"error":"storage_full","retryable":true,"retry_after":60}
+{"error":"storage_full","code":"storage_full","retryable":true}
 ```
 
 SQLite reports filesystem exhaustion as `SQLITE_FULL`, but project-quota

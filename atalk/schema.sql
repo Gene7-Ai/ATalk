@@ -122,3 +122,11 @@ CREATE TABLE IF NOT EXISTS settings (
 );
 
 INSERT OR IGNORE INTO settings (key, value) VALUES ('retention_days', '30');
+
+-- Operational metadata only.  Health recovery probes may update this row;
+-- they never create or acknowledge a business event.
+CREATE TABLE IF NOT EXISTS storage_metadata (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+INSERT OR IGNORE INTO storage_metadata (key, value) VALUES ('write_probe', 'initialized');

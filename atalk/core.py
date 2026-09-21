@@ -590,6 +590,14 @@ class AtalkStore:
             "retention_days": int(self.conn.execute("SELECT value FROM settings WHERE key='retention_days'").fetchone()["value"]),
         }
 
+    def write_probe(self) -> None:
+        """Commit a harmless operational-metadata write to verify durability."""
+        with self.lock, self.conn:
+            self.conn.execute(
+                "UPDATE storage_metadata SET value=? WHERE key='write_probe'",
+                (now_iso(),),
+            )
+
     def _row_to_event(self, row: sqlite3.Row) -> Event:
         return Event(
             id=int(row["id"]),

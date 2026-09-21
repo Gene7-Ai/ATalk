@@ -2,7 +2,7 @@
 
 ## Unreleased
 - HTTP: return stable `507 storage_full` for SQLite/ENOSPC/EDQUOT exhaustion; keep genuine or unconfirmed I/O failures distinct as `503 storage_io_error`.
-- Operations: add `GET /readiness`; storage-full writes degrade health/readiness until a later real write commits.
+- Operations: keep `GET /readiness` healthy while the ledger remains readable; expose degraded write health and recover it with a metadata-only durability probe after capacity returns.
 - Tests: cover rollback/no-sequence-leak, degraded health, idempotent retry behavior, and recovery.
 
 ## 0.3.0a1 (pre-release, 2026-09)

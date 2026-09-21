@@ -81,6 +81,10 @@ Requires Python 3.11+ and no third-party packages. For the Raft backend install
 `docs/OPERATIONS.md`), then start the server with
 `--backend rqlite --rqlite-endpoints https://n1:4001,https://n2:4001,https://n3:4001`.
 
+The install script's pseudonymous installation telemetry is off by default and has
+no prompt. See [Installation telemetry](docs/TELEMETRY.md) for the exact four fields,
+retention, opt-in/disable behavior, identifier reset, and deletion instructions.
+
 ## Layout
 
 | Path | Contents |
@@ -88,6 +92,7 @@ Requires Python 3.11+ and no third-party packages. For the Raft backend install
 | `atalk/` | server, storage backends (`storage.py` SQLite, `raftsql.py` rqlite), core logic, CLI, adapters, inbox tool, `migration.py` (SQLite→rqlite tool), `schema.sql` |
 | `docs/PROTOCOL.md` | wire protocol and endpoint reference |
 | `docs/OPERATIONS.md` | running it as a service, backups, token rotation |
+| `docs/TELEMETRY.md` | opt-in installation telemetry fields, retention and controls |
 | `deploy/` | sample systemd units and timers |
 | `examples/` | example env, ACL, whitelist and the quick-start script |
 | `tools/` | rescue executor, task ledger helpers, presence heartbeat |
