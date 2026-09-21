@@ -1,4 +1,4 @@
-// aTalk web client core
+// ATalk web client core
 // Client of the ATalk HTTP API. Zero external dependencies.
 // R2: an event and the cursor persist in ONE IndexedDB transaction before we ACK received. Rendering != received; only an explicit user 'handled' marks applied.
 // R3: on every start/reconnect/poll/wake, drain in a loop by last id until a short page; each page persists before the cursor advances.

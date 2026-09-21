@@ -32,30 +32,30 @@ clear_log() { : > "$MOCK_CURL_LOG"; }
 assert_count() { [ "$(count)" -eq "$1" ] || { echo "expected $1 posts, got $(count)"; exit 1; }; }
 
 # Default is off.
-run i v0.3.0a5
+run i v0.3.0a6
 assert_count 0
 
 # Explicit flags outrank the environment, and --no-telemetry always wins.
-ATALK_TELEMETRY=1 run i v0.3.0a5 --no-telemetry
+ATALK_TELEMETRY=1 run i v0.3.0a6 --no-telemetry
 assert_count 0
-run i v0.3.0a5 --telemetry --no-telemetry
+run i v0.3.0a6 --telemetry --no-telemetry
 assert_count 0
-run i v0.3.0a5 --telemetry
+run i v0.3.0a6 --telemetry
 assert_count 1
 clear_log
-ATALK_TELEMETRY=1 run i v0.3.0a5
+ATALK_TELEMETRY=1 run i v0.3.0a6
 assert_count 1
 
 # Fresh and upgrade events use distinct endpoints.
 grep -q 'https://t.atalk.ai/i' "$MOCK_CURL_LOG"
 clear_log
-run u v0.3.0a5 --telemetry
+run u v0.3.0a6 --telemetry
 assert_count 1
 grep -q 'https://t.atalk.ai/u' "$MOCK_CURL_LOG"
 
 # A failed telemetry request is silent and returns success to its installer caller.
 clear_log
-MOCK_CURL_EXIT=28 run i v0.3.0a5 --telemetry
+MOCK_CURL_EXIT=28 run i v0.3.0a6 --telemetry
 assert_count 1
 [ ! -s "$TMP/stdout" ] && [ ! -s "$TMP/stderr" ]
 
@@ -65,7 +65,7 @@ import json, pathlib, stat, sys
 
 payload = json.loads(pathlib.Path(sys.argv[1]).read_text())
 assert set(payload) == {"version", "platform", "install_id", "mode"}, payload
-assert payload["version"] == "v0.3.0a5"
+assert payload["version"] == "v0.3.0a6"
 assert "/" in payload["platform"]
 assert payload["mode"] == "script-tar"
 id_path = pathlib.Path(sys.argv[2])
@@ -79,7 +79,7 @@ install_id=$(cat "$TMP/state/install_id")
 
 # Docker consumers reuse the same implementation and change only the mode.
 clear_log
-ATALK_TELEMETRY_MODE=docker run i v0.3.0a5 --telemetry
+ATALK_TELEMETRY_MODE=docker run i v0.3.0a6 --telemetry
 grep -q '"mode":"docker"' "$MOCK_CURL_PAYLOAD"
 
 echo "telemetry tests: ok"

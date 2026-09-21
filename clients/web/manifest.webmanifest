@@ -1,6 +1,6 @@
 {
-  "name": "aTalk",
-  "short_name": "aTalk",
+  "name": "ATalk",
+  "short_name": "ATalk",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

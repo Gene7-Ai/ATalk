@@ -1,5 +1,5 @@
 [Unit]
-Description=aTalk presence every 5min
+Description=ATalk presence every 5min
 [Timer]
 OnBootSec=2min
 OnUnitActiveSec=5min
