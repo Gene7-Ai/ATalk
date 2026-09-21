@@ -17,7 +17,7 @@ while [ "$#" -gt 0 ]; do
   esac
   shift
 done
-TAG=${TAG:-v0.3.0a5}
+TAG=${TAG:-v0.3.0a6}
 [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([a-z][a-z0-9]*|-rc[0-9]+)?$ ]] || { echo "invalid tag: $TAG"; exit 2; }
 [ "$(id -u)" = 0 ] || { echo "run as root"; exit 2; }
 TELEMETRY_ON=0
@@ -33,7 +33,7 @@ diag(){ echo "--- diagnostics"; systemctl status atalk --no-pager 2>&1 | tail -5
 if [ "$MODE" != install ]; then
   if [ -d /run/systemd/system ]; then systemctl disable --now atalk 2>/dev/null || true; fi
   rm -f /etc/systemd/system/atalk.service; if [ -d /run/systemd/system ]; then systemctl daemon-reload; fi; rm -rf /opt/atalk
-  if [ "$MODE" = purge ]; then rm -rf /var/lib/atalk; userdel atalk 2>/dev/null || true; echo "aTalk purged (ledger deleted)"; else echo "aTalk uninstalled; ledger kept at /var/lib/atalk (use --purge to delete)"; fi; exit 0
+  if [ "$MODE" = purge ]; then rm -rf /var/lib/atalk; userdel atalk 2>/dev/null || true; echo "ATalk purged (ledger deleted)"; else echo "ATalk uninstalled; ledger kept at /var/lib/atalk (use --purge to delete)"; fi; exit 0
 fi
 python3 -c 'import sys; sys.exit(0 if sys.version_info>=(3,11) else 1)' || { echo "need python3 >= 3.11"; exit 2; }
 command -v curl >/dev/null && command -v sha256sum >/dev/null || { echo "need curl and sha256sum"; exit 2; }
@@ -65,7 +65,7 @@ send_telemetry() {
   [ -f "$helper" ] && /bin/sh "$helper" "$event" "$TAG" "${TELEMETRY_FLAGS[@]}" >/dev/null 2>&1 || true
 }
 if [ ! -d /run/systemd/system ]; then
-  echo "aTalk $TAG files installed (/opt/atalk/current, ledger /var/lib/atalk/atalk.db) but systemd is not running here (container?)."
+  echo "ATalk $TAG files installed (/opt/atalk/current, ledger /var/lib/atalk/atalk.db) but systemd is not running here (container?)."
   echo "Start manually: $(hint env PYTHONPATH=/opt/atalk/current python3 -m atalk.server --backend sqlite --db /var/lib/atalk/atalk.db --host 127.0.0.1 --port 7070)"
   # Files-only setup has not passed /readiness, so it is not counted as a
   # successful installation event.
@@ -73,7 +73,7 @@ if [ ! -d /run/systemd/system ]; then
 fi
 cat > /etc/systemd/system/atalk.service <<UNIT
 [Unit]
-Description=aTalk Community server (single node, SQLite)
+Description=ATalk Community server (single node, SQLite)
 After=network-online.target
 [Service]
 User=atalk
@@ -94,4 +94,4 @@ systemctl daemon-reload && systemctl enable --now atalk >/dev/null 2>&1; systemc
 for i in $(seq 1 20); do R=$(curl -s -m 2 -o /dev/null -w '%{http_code}' http://127.0.0.1:7070/readiness || true); [ "$R" = 200 ] && break; sleep 0.5; done
 if [ "${R:-}" != 200 ]; then echo "install FAILED: /readiness returned ${R:-none}"; diag; if [ -n "$PREV" ] && [ -d "$PREV" ]; then ln -sfn "$PREV" /opt/atalk/current; systemctl restart atalk; echo "rolled back to $PREV (ledger untouched)"; fi; exit 4; fi
 send_telemetry
-echo "aTalk $TAG installed: readiness 200 on 127.0.0.1:7070. Ledger: /var/lib/atalk/atalk.db. Add a peer: $(hint env PYTHONPATH=/opt/atalk/current python3 -m atalk.cli --db /var/lib/atalk/atalk.db peer-add '<name>' --token '<token>' --role agent --platform '<platform>')"
+echo "ATalk $TAG installed: readiness 200 on 127.0.0.1:7070. Ledger: /var/lib/atalk/atalk.db. Add a peer: $(hint env PYTHONPATH=/opt/atalk/current python3 -m atalk.cli --db /var/lib/atalk/atalk.db peer-add '<name>' --token '<token>' --role agent --platform '<platform>')"

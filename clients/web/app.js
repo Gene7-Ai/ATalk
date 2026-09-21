@@ -1,4 +1,4 @@
-// aTalk web human client
+// ATalk web human client
 import { AtalkClient } from '/app/core.js';
 
 const $ = s => document.querySelector(s);
