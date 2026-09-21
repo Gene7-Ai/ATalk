@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import queue
+import shutil
 import sqlite3
 import tempfile
 import threading
@@ -133,9 +134,9 @@ def classify_storage_error(exc: BaseException, store: AtalkStorage) -> tuple[str
     if not isinstance(exc, sqlite3.OperationalError):
         return None
     primary = sqlite_primary_code(exc)
-    if primary == sqlite3.SQLITE_FULL or "database or disk is full" in str(exc).lower():
+    if primary == sqlite3.SQLITE_FULL:
         return ("storage_full", 507, None)
-    if primary == sqlite3.SQLITE_IOERR or "disk i/o error" in str(exc).lower():
+    if primary == sqlite3.SQLITE_IOERR:
         probe_errno = probe_storage_errno(store)
         if probe_errno in {errno.ENOSPC, errno.EDQUOT}:
             return ("storage_full", 507, probe_errno)
@@ -200,18 +201,28 @@ class AtalkHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         qs = parse_qs(parsed.query)
         if parsed.path in {"/health", "/readiness"}:
-            snapshot = self.server.store.health_snapshot()
+            self.server.refresh_storage_health()
+            readable = True
+            try:
+                snapshot = self.server.store.health_snapshot()
+            except Exception:
+                logging.exception("ledger read probe failed during GET %s", parsed.path)
+                readable = False
+                snapshot = {}
             storage = self.server.storage_health()
             snapshot.update({
-                "ok": storage["ok"],
-                "status": "ok" if storage["ok"] else "degraded",
+                "ok": readable and storage["write_ready"],
+                "status": "ok" if readable and storage["write_ready"] else "degraded",
+                "write_ready": storage["write_ready"],
+                "storage_used": storage["used"],
+                "storage_limit": storage["limit"],
                 "storage": storage,
                 "wake_streams": self.server.wake.connected(),
                 "wake_streams_scope": "node-local",
             })
             if parsed.path == "/readiness":
-                snapshot["ready"] = storage["ok"]
-                return self.send_json(snapshot, status=200 if storage["ok"] else 503)
+                snapshot["ready"] = readable
+                return self.send_json(snapshot, status=200 if readable else 503)
             return self.send_json(snapshot)
         if parsed.path == "/events":
             unknown = sorted(set(qs) - {"target", "since_id", "limit", "state"})
@@ -388,7 +399,7 @@ class AtalkHandler(BaseHTTPRequestHandler):
             )
             self.server.mark_storage_failure(public_error)
             return self.send_json(
-                {"error": public_error, "retryable": True, "retry_after": 60},
+                {"error": public_error, "code": public_error, "retryable": True},
                 status=status,
             )
         except Exception:
@@ -501,13 +512,47 @@ class AtalkHTTPServer(ThreadingHTTPServer):
             self._storage_error = None
             self._storage_error_since = None
 
+    def refresh_storage_health(self) -> None:
+        """Clear a write-failure latch after a durable metadata-only write."""
+        with self._storage_health_lock:
+            latched = self._storage_error is not None
+        if not latched:
+            return
+        probe = getattr(self.store, "write_probe", None)
+        if probe is None:
+            return
+        try:
+            probe()
+        except Exception:
+            # The original classified failure remains latched.  A health request
+            # must never replace it with broad exception/message heuristics.
+            return
+        self.mark_storage_success()
+
+    def storage_capacity(self) -> tuple[int | None, int | None]:
+        db_path = getattr(self.store, "db_path", None)
+        if db_path is None:
+            return None, None
+        try:
+            usage = shutil.disk_usage(Path(db_path).parent)
+        except OSError:
+            return None, None
+        return usage.used, usage.total
+
     def storage_health(self) -> dict:
         with self._storage_health_lock:
             error = self._storage_error
             since = self._storage_error_since
-        if error is None:
-            return {"ok": True}
-        return {"ok": False, "error": error, "since": since}
+        used, limit = self.storage_capacity()
+        result = {
+            "ok": error is None,
+            "write_ready": error is None,
+            "used": used,
+            "limit": limit,
+        }
+        if error is not None:
+            result.update({"error": error, "since": since})
+        return result
 
 
 def first(qs: dict[str, list[str]], key: str) -> str | None:

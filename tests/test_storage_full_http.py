@@ -32,13 +32,24 @@ class ToggleFullStore:
             raise exc
         return self.inner.insert_event(*args, **kwargs)
 
+    def write_probe(self):
+        if self.failure in {"full", "probe_full"}:
+            exc = sqlite3.OperationalError("database or disk is full")
+            exc.sqlite_errorcode = sqlite3.SQLITE_FULL
+            raise exc
+        if self.failure == "ioerr":
+            exc = sqlite3.OperationalError("disk I/O error")
+            exc.sqlite_errorcode = sqlite3.SQLITE_IOERR_WRITE
+            raise exc
+        self.inner.write_probe()
+
 
 class StorageFullHttpTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         inner = AtalkStore(os.path.join(self.tmp.name, "atalk.db"))
         self.alice_token = inner.add_peer("alice", role="agent")
-        inner.add_peer("bob", role="agent")
+        self.bob_token = inner.add_peer("bob", role="agent")
         self.store = ToggleFullStore(inner)
         self.server = AtalkHTTPServer(("127.0.0.1", 0), self.store, WakeHub())
         self.server.message_acl = MessageAcl(path=os.path.join(self.tmp.name, "missing-acl.json"))
@@ -76,12 +87,14 @@ class StorageFullHttpTest(unittest.TestCase):
             self.alice_token,
         )
 
-    def test_storage_full_returns_507_and_recovers_after_real_write(self):
+    def test_storage_full_returns_507_and_recovers_via_metadata_probe(self):
         self.store.failure = "full"
         status, body = self.post_event("full-1")
         self.assertEqual(status, 507)
         self.assertEqual(body["error"], "storage_full")
+        self.assertEqual(body["code"], "storage_full")
         self.assertTrue(body["retryable"])
+        self.assertEqual(set(body), {"error", "code", "retryable"})
         self.assertEqual(self.store.inner.list_events(target="bob", state="all"), [])
         counter = self.store.inner.conn.execute(
             "SELECT last_seq FROM source_counters WHERE source='alice'"
@@ -92,33 +105,44 @@ class StorageFullHttpTest(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertFalse(health["ok"])
         self.assertEqual(health["status"], "degraded")
+        self.assertFalse(health["write_ready"])
+        self.assertEqual(health["storage_used"], health["storage"]["used"])
+        self.assertEqual(health["storage_limit"], health["storage"]["limit"])
         self.assertEqual(health["storage"]["error"], "storage_full")
-
-        status, readiness = self.call("GET", "/readiness")
-        self.assertEqual(status, 503)
-        self.assertFalse(readiness["ready"])
-        self.assertEqual(readiness["storage"]["error"], "storage_full")
-
-        self.store.failure = None
-        status, event = self.post_event("recovered-1")
-        self.assertEqual(status, 201)
-        self.assertEqual(event["seq"], 1)
+        self.assertFalse(health["storage"]["write_ready"])
+        self.assertIsInstance(health["storage"]["used"], int)
+        self.assertIsInstance(health["storage"]["limit"], int)
 
         status, readiness = self.call("GET", "/readiness")
         self.assertEqual(status, 200)
         self.assertTrue(readiness["ready"])
-        self.assertTrue(readiness["storage"]["ok"])
+        self.assertEqual(readiness["storage"]["error"], "storage_full")
 
-    def test_idempotent_retry_does_not_clear_storage_full(self):
+        self.store.failure = None
+        status, readiness = self.call("GET", "/readiness")
+        self.assertEqual(status, 200)
+        self.assertTrue(readiness["ready"])
+        self.assertTrue(readiness["storage"]["ok"])
+        self.assertTrue(readiness["storage"]["write_ready"])
+        self.assertEqual(self.store.inner.list_events(target="bob", state="all"), [])
+        self.assertEqual(self.store.inner.acks_for("full-1"), [])
+
+    def test_idempotent_retry_does_not_clear_latch_but_probe_does(self):
         status, _ = self.post_event("existing-1")
         self.assertEqual(status, 201)
         self.server.mark_storage_full()
-
+        self.store.failure = "probe_full"
         status, _ = self.post_event("existing-1")
         self.assertEqual(status, 201)
         status, readiness = self.call("GET", "/readiness")
-        self.assertEqual(status, 503)
-        self.assertFalse(readiness["ready"])
+        self.assertEqual(status, 200)
+        self.assertTrue(readiness["ready"])
+        self.assertFalse(readiness["storage"]["write_ready"])
+
+        self.store.failure = None
+        status, health = self.call("GET", "/health")
+        self.assertEqual(status, 200)
+        self.assertTrue(health["storage"]["write_ready"])
 
     def test_quota_ioerr_with_edquot_probe_maps_to_storage_full(self):
         self.store.failure = "ioerr"
@@ -127,7 +151,7 @@ class StorageFullHttpTest(unittest.TestCase):
         self.assertEqual(status, 507)
         self.assertEqual(body["error"], "storage_full")
         status, readiness = self.call("GET", "/readiness")
-        self.assertEqual(status, 503)
+        self.assertEqual(status, 200)
         self.assertEqual(readiness["storage"]["error"], "storage_full")
 
     def test_genuine_ioerr_is_not_misreported_as_capacity(self):
@@ -137,8 +161,30 @@ class StorageFullHttpTest(unittest.TestCase):
         self.assertEqual(status, 503)
         self.assertEqual(body["error"], "storage_io_error")
         status, readiness = self.call("GET", "/readiness")
-        self.assertEqual(status, 503)
+        self.assertEqual(status, 200)
         self.assertEqual(readiness["storage"]["error"], "storage_io_error")
+
+    def test_error_message_without_sqlite_capacity_code_is_not_classified(self):
+        def message_only(*args, **kwargs):
+            raise sqlite3.OperationalError("database or disk is full")
+
+        with mock.patch.object(self.store, "insert_event", side_effect=message_only):
+            status, body = self.post_event("message-only")
+        self.assertEqual(status, 500)
+        self.assertEqual(body, {"error": "internal server error"})
+
+    def test_reads_remain_available_while_writes_are_latched(self):
+        status, _ = self.post_event("readable-1")
+        self.assertEqual(status, 201)
+        self.store.failure = "full"
+        status, _ = self.post_event("readable-2")
+        self.assertEqual(status, 507)
+        status, events = self.call("GET", "/events?target=bob&state=all", token=self.bob_token)
+        self.assertEqual(status, 200)
+        self.assertEqual([event["event_id"] for event in events], ["readable-1"])
+        status, readiness = self.call("GET", "/readiness")
+        self.assertEqual(status, 200)
+        self.assertEqual(readiness["last_event_id"], 1)
 
 
 if __name__ == "__main__":
