@@ -17,7 +17,7 @@ while [ "$#" -gt 0 ]; do
   esac
   shift
 done
-TAG=${TAG:-v0.3.0a6}
+TAG=${TAG:-v0.3.0a7}
 [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([a-z][a-z0-9]*|-rc[0-9]+)?$ ]] || { echo "invalid tag: $TAG"; exit 2; }
 [ "$(id -u)" = 0 ] || { echo "run as root"; exit 2; }
 TELEMETRY_ON=0

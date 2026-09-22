@@ -91,6 +91,14 @@ class AtalkStore:
             conn = self._new_conn()
         return conn
 
+    def close_thread_connection(self) -> None:
+        """Close and forget the SQLite connection owned by the current thread."""
+        conn = getattr(self._local, "conn", None)
+        if conn is None:
+            return
+        del self._local.conn
+        conn.close()
+
     def init_schema(self) -> None:
         schema = Path(__file__).with_name("schema.sql").read_text(encoding="utf-8")
         self.conn.executescript(schema)

@@ -4,6 +4,7 @@ import os
 import sqlite3
 import tempfile
 import threading
+import time
 import unittest
 import urllib.error
 import urllib.request
@@ -86,6 +87,31 @@ class StorageFullHttpTest(unittest.TestCase):
             },
             self.alice_token,
         )
+
+    def sqlite_fd_count(self):
+        db_path = os.path.realpath(self.store.inner.db_path)
+        count = 0
+        for fd in os.listdir("/proc/self/fd"):
+            try:
+                target = os.readlink(f"/proc/self/fd/{fd}")
+            except OSError:
+                continue
+            if os.path.realpath(target.removesuffix("-wal").removesuffix("-shm")) == db_path:
+                count += 1
+        return count
+
+    def test_request_threads_close_sqlite_connections(self):
+        baseline = self.sqlite_fd_count()
+        for _ in range(200):
+            status, readiness = self.call("GET", "/readiness")
+            self.assertEqual(status, 200)
+            self.assertTrue(readiness["ready"])
+
+        deadline = time.monotonic() + 2
+        while time.monotonic() < deadline and self.sqlite_fd_count() > baseline + 2:
+            time.sleep(0.01)
+
+        self.assertLessEqual(self.sqlite_fd_count(), baseline + 2)
 
     def test_storage_full_returns_507_and_recovers_via_metadata_probe(self):
         self.store.failure = "full"
