@@ -496,6 +496,18 @@ class AtalkHTTPServer(ThreadingHTTPServer):
         self._storage_error: str | None = None
         self._storage_error_since: str | None = None
 
+    def process_request_thread(self, request, client_address) -> None:
+        """Release request-thread-local storage resources when a handler exits."""
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            close = getattr(self.store, "close_thread_connection", None)
+            if close is not None:
+                try:
+                    close()
+                except Exception:
+                    self.handle_error(request, client_address)
+
     def mark_storage_failure(self, error: str) -> None:
         with self._storage_health_lock:
             if self._storage_error != error or self._storage_error_since is None:

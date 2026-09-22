@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.3.0a7 (pre-release, 2026-09-22)
+- SQLite: close request-thread-local connections when each threaded HTTP request exits, preventing health probes from exhausting the process file-descriptor limit.
+- Tests: cover sustained readiness probing and assert SQLite descriptors remain bounded.
+
 ## 0.3.0a6 (pre-release, 2026-09-21)
 - Branding: use the canonical `ATalk` product spelling in user-visible installer, web client, and service descriptions.
 
