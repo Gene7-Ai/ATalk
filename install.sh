@@ -47,7 +47,7 @@ py_ok() { [ -n "$1" ] && "$1" -c 'import sys; sys.exit(0 if sys.version_info>=(3
 # root-owned and not group/other-writable: the resolved file, and every ancestor directory of both the
 # path as found and the resolved path (ExecStart uses the resolved path)
 root_only() { [ "$(stat -c %u "$1")" = 0 ] && [ $(( 0$(stat -c %a "$1") & 022 )) = 0 ]; }
-py_safe() { local f d; f=$(readlink -f "$1") || return 1; root_only "$f" || return 1
+py_safe() { local f d; case $1 in /*) ;; *) return 1 ;; esac; f=$(readlink -f "$1") || return 1; root_only "$f" || return 1
   for d in "$(dirname "$1")" "$(dirname "$f")"; do while :; do root_only "$d" || return 1; [ "$d" = / ] && break; d=$(dirname "$d"); done; done; }
 PY=
 for c in python3 python3.13 python3.12 python3.11; do
