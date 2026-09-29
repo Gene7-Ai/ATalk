@@ -43,9 +43,11 @@ W=$(mktemp -d); trap 'rm -rf "$W"' EXIT
 PBS=https://github.com/astral-sh/python-build-standalone/releases/download/20260924
 PBS_VER=3.12.14+20260924
 py_ok() { [ -n "$1" ] && "$1" -c 'import sys; sys.exit(0 if sys.version_info>=(3,11) else 1)' 2>/dev/null; }
+# only trust an interpreter (and its directory) owned by root and not writable by group/others: it becomes ExecStart
+py_safe() { local f d; f=$(readlink -f "$1") || return 1; d=$(dirname "$f"); for x in "$f" "$d"; do [ "$(stat -c %u "$x")" = 0 ] && [ $(( 0$(stat -c %a "$x") & 022 )) = 0 ] || return 1; done; }
 PY=
-for c in python3 python3.13 python3.12 python3.11; do p=$(command -v "$c" 2>/dev/null || true); if py_ok "$p"; then PY=$p; break; fi; done
-if [ -z "$PY" ] && py_ok /opt/atalk/python/bin/python3; then PY=/opt/atalk/python/bin/python3; fi
+for c in python3 python3.13 python3.12 python3.11; do p=$(command -v "$c" 2>/dev/null || true); if py_ok "$p" && py_safe "$p"; then PY=$p; break; fi; [ -n "$p" ] && py_ok "$p" && echo "skipping $p: not root-owned or writable by group/others"; done
+if [ -z "$PY" ] && py_ok /opt/atalk/python/bin/python3 && py_safe /opt/atalk/python/bin/python3; then PY=/opt/atalk/python/bin/python3; fi
 if [ -z "$PY" ]; then
   case "$(uname -m)" in
     x86_64) PBS_ARCH=x86_64; PBS_SHA=269b2c99e4db15b242bf01832f4fea1e8f1a664f273cff519393f296e9820b41 ;;
