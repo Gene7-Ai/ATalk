@@ -44,15 +44,18 @@ PBS=https://github.com/astral-sh/python-build-standalone/releases/download/20260
 PBS_VER=3.12.14+20260924
 py_ok() { [ -n "$1" ] && "$1" -c 'import sys; sys.exit(0 if sys.version_info>=(3,11) else 1)' 2>/dev/null; }
 # only trust an interpreter (and its directory) owned by root and not writable by group/others: it becomes ExecStart
-# checks the path as given, its directory, and the resolved file and its directory (ExecStart uses the resolved path)
-py_safe() { local f x; f=$(readlink -f "$1") || return 1; for x in "$(dirname "$1")" "$f" "$(dirname "$f")"; do [ "$(stat -c %u "$x")" = 0 ] && [ $(( 0$(stat -c %a "$x") & 022 )) = 0 ] || return 1; done; }
+# root-owned and not group/other-writable: the resolved file, and every ancestor directory of both the
+# path as found and the resolved path (ExecStart uses the resolved path)
+root_only() { [ "$(stat -c %u "$1")" = 0 ] && [ $(( 0$(stat -c %a "$1") & 022 )) = 0 ]; }
+py_safe() { local f d; f=$(readlink -f "$1") || return 1; root_only "$f" || return 1
+  for d in "$(dirname "$1")" "$(dirname "$f")"; do while :; do root_only "$d" || return 1; [ "$d" = / ] && break; d=$(dirname "$d"); done; done; }
 PY=
 for c in python3 python3.13 python3.12 python3.11; do
   p=$(command -v "$c" 2>/dev/null || true); [ -n "$p" ] || continue
   if ! py_safe "$p"; then echo "skipping $p: not root-owned or writable by group/others"; continue; fi
-  if py_ok "$p"; then PY=$(readlink -f "$p"); break; fi
+  r=$(readlink -f "$p"); if py_ok "$r"; then PY=$r; break; fi
 done
-if [ -z "$PY" ] && py_safe /opt/atalk/python/bin/python3 && py_ok /opt/atalk/python/bin/python3; then PY=$(readlink -f /opt/atalk/python/bin/python3); fi
+if [ -z "$PY" ] && py_safe /opt/atalk/python/bin/python3; then r=$(readlink -f /opt/atalk/python/bin/python3); py_ok "$r" && PY=$r; fi
 if [ -z "$PY" ]; then
   case "$(uname -m)" in
     x86_64) PBS_ARCH=x86_64; PBS_SHA=269b2c99e4db15b242bf01832f4fea1e8f1a664f273cff519393f296e9820b41 ;;
