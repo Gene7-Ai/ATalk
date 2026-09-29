@@ -1,5 +1,7 @@
 #!/bin/bash
-# ATalk Community one-command installer (Linux + systemd, Python >= 3.11).
+# ATalk Community one-command installer (Linux + systemd).
+# Uses the system python3 if it is >= 3.11; otherwise installs a private,
+# checksum-pinned CPython 3.12 under /opt/atalk/python (system Python untouched).
 #   Install: curl -fsSL https://atalk.ai/install.sh | sudo bash -s -- [tag]
 #   Uninstall and keep the ledger: sudo bash install.sh --uninstall
 #   Purge including the ledger: sudo bash install.sh --purge
@@ -35,9 +37,33 @@ if [ "$MODE" != install ]; then
   rm -f /etc/systemd/system/atalk.service; if [ -d /run/systemd/system ]; then systemctl daemon-reload; fi; rm -rf /opt/atalk
   if [ "$MODE" = purge ]; then rm -rf /var/lib/atalk; userdel atalk 2>/dev/null || true; echo "ATalk purged (ledger deleted)"; else echo "ATalk uninstalled; ledger kept at /var/lib/atalk (use --purge to delete)"; fi; exit 0
 fi
-python3 -c 'import sys; sys.exit(0 if sys.version_info>=(3,11) else 1)' || { echo "need python3 >= 3.11"; exit 2; }
 command -v curl >/dev/null && command -v sha256sum >/dev/null || { echo "need curl and sha256sum"; exit 2; }
 W=$(mktemp -d); trap 'rm -rf "$W"' EXIT
+# Pick a Python >= 3.11: system python3 / python3.1x first, else the private bundled CPython.
+PBS=https://github.com/astral-sh/python-build-standalone/releases/download/20260924
+PBS_VER=3.12.14+20260924
+py_ok() { [ -n "$1" ] && "$1" -c 'import sys; sys.exit(0 if sys.version_info>=(3,11) else 1)' 2>/dev/null; }
+PY=
+for c in python3 python3.13 python3.12 python3.11; do p=$(command -v "$c" 2>/dev/null || true); if py_ok "$p"; then PY=$p; break; fi; done
+if [ -z "$PY" ] && py_ok /opt/atalk/python/bin/python3; then PY=/opt/atalk/python/bin/python3; fi
+if [ -z "$PY" ]; then
+  case "$(uname -m)" in
+    x86_64) PBS_ARCH=x86_64; PBS_SHA=269b2c99e4db15b242bf01832f4fea1e8f1a664f273cff519393f296e9820b41 ;;
+    aarch64|arm64) PBS_ARCH=aarch64; PBS_SHA=c8499b61252c433280f134df954464d19811527b31cb920c35fc6967c1222e35 ;;
+    *) echo "need python3 >= 3.11 (no bundled Python for $(uname -m)); install it and re-run"; exit 2 ;;
+  esac
+  ldd --version 2>&1 | grep -qi musl && { echo "need python3 >= 3.11 (bundled Python needs glibc); install it and re-run"; exit 2; }
+  PBS_TGZ=cpython-$PBS_VER-$PBS_ARCH-unknown-linux-gnu-install_only_stripped.tar.gz
+  echo "system python3 is older than 3.11 — installing private CPython ${PBS_VER%%+*} under /opt/atalk/python (system Python untouched)"
+  curl -fsSL "$PBS/$PBS_TGZ" -o "$W/$PBS_TGZ"
+  echo "$PBS_SHA  $W/$PBS_TGZ" | sha256sum -c --quiet - || { echo "checksum verification FAILED for $PBS_TGZ — aborting, nothing installed"; exit 3; }
+  install -d -m 755 /opt/atalk; rm -rf /opt/atalk/python.new; mkdir -p /opt/atalk/python.new
+  tar -xzf "$W/$PBS_TGZ" --strip-components=1 -C /opt/atalk/python.new
+  rm -rf /opt/atalk/python; mv /opt/atalk/python.new /opt/atalk/python; chown -R root:root /opt/atalk/python; chmod -R a+rX,go-w /opt/atalk/python
+  PY=/opt/atalk/python/bin/python3
+  py_ok "$PY" || { echo "bundled Python failed to start"; exit 3; }
+fi
+echo "python: $PY ($("$PY" -c 'import platform; print(platform.python_version())'))"
 curl -fsSL "$DL/atalk-community-$TAG.tar.gz" -o "$W/atalk-community-$TAG.tar.gz"
 curl -fsSL "$DL/SHA256SUMS" -o "$W/SHA256SUMS"
 ( cd "$W" && grep " atalk-community-$TAG.tar.gz\$" SHA256SUMS > SUMS.one && sha256sum -c --quiet SUMS.one ) || { echo "checksum verification FAILED for atalk-community-$TAG.tar.gz — aborting, nothing installed"; exit 3; }
@@ -53,7 +79,7 @@ PREV=$(readlink /opt/atalk/current 2>/dev/null || true); ln -sfn "/opt/atalk/$TA
 if command -v runuser >/dev/null 2>&1; then as_atalk() { runuser -u atalk -- "$@"; }; AS_ATALK_HINT="runuser -u atalk -- "
 else as_atalk() { su -s /bin/sh atalk -c "$*"; }; AS_ATALK_HINT="su -s /bin/sh atalk -c '"; fi
 hint() { if [ "$AS_ATALK_HINT" = "runuser -u atalk -- " ]; then echo "runuser -u atalk -- $*"; else echo "su -s /bin/sh atalk -c '$*'"; fi; }
-[ -f /var/lib/atalk/atalk.db ] || as_atalk env PYTHONPATH=/opt/atalk/current python3 -m atalk.cli --db /var/lib/atalk/atalk.db init >/dev/null
+[ -f /var/lib/atalk/atalk.db ] || as_atalk env PYTHONPATH=/opt/atalk/current $PY -m atalk.cli --db /var/lib/atalk/atalk.db init >/dev/null
 send_telemetry() {
   local event=i helper=/opt/atalk/current/deploy/telemetry.sh
   [ "$WAS_INSTALLED" = 1 ] && event=u
@@ -66,7 +92,7 @@ send_telemetry() {
 }
 if [ ! -d /run/systemd/system ]; then
   echo "ATalk $TAG files installed (/opt/atalk/current, ledger /var/lib/atalk/atalk.db) but systemd is not running here (container?)."
-  echo "Start manually: $(hint env PYTHONPATH=/opt/atalk/current python3 -m atalk.server --backend sqlite --db /var/lib/atalk/atalk.db --host 127.0.0.1 --port 7070)"
+  echo "Start manually: $(hint env PYTHONPATH=/opt/atalk/current $PY -m atalk.server --backend sqlite --db /var/lib/atalk/atalk.db --host 127.0.0.1 --port 7070)"
   # Files-only setup has not passed /readiness, so it is not counted as a
   # successful installation event.
   exit 0
@@ -79,7 +105,7 @@ After=network-online.target
 User=atalk
 Group=atalk
 Environment=PYTHONPATH=/opt/atalk/current
-ExecStart=/usr/bin/python3 -m atalk.server --backend sqlite --db /var/lib/atalk/atalk.db --host 127.0.0.1 --port 7070
+ExecStart=$PY -m atalk.server --backend sqlite --db /var/lib/atalk/atalk.db --host 127.0.0.1 --port 7070
 Restart=always
 RestartSec=3
 NoNewPrivileges=yes
@@ -94,4 +120,4 @@ systemctl daemon-reload && systemctl enable --now atalk >/dev/null 2>&1; systemc
 for i in $(seq 1 20); do R=$(curl -s -m 2 -o /dev/null -w '%{http_code}' http://127.0.0.1:7070/readiness || true); [ "$R" = 200 ] && break; sleep 0.5; done
 if [ "${R:-}" != 200 ]; then echo "install FAILED: /readiness returned ${R:-none}"; diag; if [ -n "$PREV" ] && [ -d "$PREV" ]; then ln -sfn "$PREV" /opt/atalk/current; systemctl restart atalk; echo "rolled back to $PREV (ledger untouched)"; fi; exit 4; fi
 send_telemetry
-echo "ATalk $TAG installed: readiness 200 on 127.0.0.1:7070. Ledger: /var/lib/atalk/atalk.db. Add a peer: $(hint env PYTHONPATH=/opt/atalk/current python3 -m atalk.cli --db /var/lib/atalk/atalk.db peer-add '<name>' --token '<token>' --role agent --platform '<platform>')"
+echo "ATalk $TAG installed: readiness 200 on 127.0.0.1:7070. Ledger: /var/lib/atalk/atalk.db. Add a peer: $(hint env PYTHONPATH=/opt/atalk/current $PY -m atalk.cli --db /var/lib/atalk/atalk.db peer-add '<name>' --token '<token>' --role agent --platform '<platform>')"
