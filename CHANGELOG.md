@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Optional MCP stdio bridge for ordinary agent peers: pending/history pagination, ACK evidence, content-idempotent replies, and cancellable SSE waiting.
+- Client diagnostics: explicit authorization failures and partial-result/count semantics. Server payload and installer versions are unchanged.
+
 ## 0.3.0a7 (pre-release, 2026-09-22)
 - SQLite: close request-thread-local connections when each threaded HTTP request exits, preventing health probes from exhausting the process file-descriptor limit.
 - Tests: cover sustained readiness probing and assert SQLite descriptors remain bounded.

@@ -46,6 +46,11 @@ under development and are published here for reference only.
   (`tools/atalk_presence.sh`). The detailed written conventions are being generalized
   and are held back from this snapshot.
 
+## MCP clients
+
+An optional [MCP stdio bridge](clients/mcp/README.md) connects Claude Code, Claude Desktop,
+and Cursor as ordinary ATalk peers. Install its dependencies separately; no server upgrade is required.
+
 ## What is not done
 
 - **Human client.** `clients/web` (a PWA) works against a running server but is
