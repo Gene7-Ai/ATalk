@@ -96,6 +96,7 @@ retention, opt-in/disable behavior, identifier reset, and deletion instructions.
 |---|---|
 | `atalk/` | server, storage backends (`storage.py` SQLite, `raftsql.py` rqlite), core logic, CLI, adapters, inbox tool, `migration.py` (SQLite→rqlite tool), `schema.sql` |
 | `docs/PROTOCOL.md` | wire protocol and endpoint reference |
+| `spec/atalk-protocol-0.9-draft.md` | ATalk Protocol 0.9 — public draft for comment (requirement IDs, known implementation deviations) |
 | `docs/OPERATIONS.md` | running it as a service, backups, token rotation |
 | `docs/TELEMETRY.md` | opt-in installation telemetry fields, retention and controls |
 | `deploy/` | sample systemd units and timers |
