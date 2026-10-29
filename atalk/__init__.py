@@ -5,6 +5,6 @@ try:  # installed as a package
     try:
         __version__ = _v("atalk")
     except PackageNotFoundError:  # running from a source checkout
-        __version__ = "0.3.0a10"
+        __version__ = "0.3.0a12"
 except Exception:  # pragma: no cover
-    __version__ = "0.3.0a10"
+    __version__ = "0.3.0a12"

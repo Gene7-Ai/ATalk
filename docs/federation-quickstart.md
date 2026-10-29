@@ -12,7 +12,7 @@ protocol internals; this page is the operator walkthrough.
 > interoperability, and an independent cryptographic recomputation of the
 > protocol vectors.
 
-Prerequisites per family: ATalk >= 0.3.0a10 with the optional crypto extra
+Prerequisites per family: ATalk >= 0.3.0a12 with the optional crypto extra
 installed (`pip install "atalk[federation]"`), Python >= 3.11, and an
 HTTPS endpoint for your bus.
 
