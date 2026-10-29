@@ -1,0 +1,420 @@
+{
+ "note": "Test vectors. Keys are derived from public seeds, for testing only — never use them on a real instance. Canonicalization follows RFC 8785 JCS; these vectors contain only strings and objects with ASCII keys, so Python sort_keys + compact separators + UTF-8 matches the JCS output (including string escaping). Self-verified by the generator; this is not independent verification.",
+ "keys": {
+  "org-a": {
+   "key_id": "oa-2026-10",
+   "seed": "sha256('TEST ONLY org-a')",
+   "public_key": "ZtPNDidF1Mbm9BUH77hNHbEVEsIMbvhktuM7ILfyl0g"
+  },
+  "org-b": {
+   "key_id": "ob-2026-10",
+   "seed": "sha256('TEST ONLY org-b')",
+   "public_key": "FB8F5N1D8v-ZxsajDfL-wCV4U07tmPdO7SOSF_f4vSg"
+  },
+  "org-test": {
+   "key_id": "ot-2026-10",
+   "seed": "sha256('TEST ONLY org-test')",
+   "public_key": "XYHRkhqd3V87_M8GUIrwH6pEp_syni3VHGR-1XPnet4"
+  }
+ },
+ "positive": {
+  "message": {
+   "signed_object": {
+    "kind": "federation.event.v0",
+    "origin": "org-a",
+    "key_id": "oa-2026-10",
+    "event": {
+     "event_id": "0b6f3c1e-1111-4111-8111-000000000001",
+     "type": "message",
+     "source": "alice@org-a",
+     "target": "bob@org-b",
+     "created_at": "2026-10-21T12:00:00Z",
+     "payload": {
+      "text": "federation test: he said \"héllo\", 🤖 path C:\\tmp\nline 2\ttab"
+     }
+    }
+   },
+   "jcs_hex": "7b226576656e74223a7b22637265617465645f6174223a22323032362d31302d32315431323a30303a30305a222c226576656e745f6964223a2230623666336331652d313131312d343131312d383131312d303030303030303030303031222c227061796c6f6164223a7b2274657874223a2266656465726174696f6e20746573743a2068652073616964205c2268c3a96c6c6f5c222c20f09fa496207061746820433a5c5c746d705c6e6c696e6520325c74746162227d2c22736f75726365223a22616c696365406f72672d61222c22746172676574223a22626f62406f72672d62222c2274797065223a226d657373616765227d2c226b65795f6964223a226f612d323032362d3130222c226b696e64223a2266656465726174696f6e2e6576656e742e7630222c226f726967696e223a226f72672d61227d",
+   "sig": "kEOiD0nvDILd2nmY6jozAjMNDG9JU3v6o1GLJIhhtravpigddq7yZtw4LzOdZmBKLdtHcSQkZrE6WONBUe5WAQ"
+  },
+  "origin_event_sig_hash": "85dc163cf1babbded5c61fbb490e2ef3bf2e6c118db2e40b3c6fdfee3bb9f805",
+  "receipts": [
+   {
+    "signed_object": {
+     "kind": "federation.receipt.v0",
+     "issuer": "org-b",
+     "key_id": "ob-2026-10",
+     "receipt": {
+      "event_id": "0b6f3c1e-1111-4111-8111-000000000001",
+      "origin": "org-a",
+      "origin_event_sig_hash": "85dc163cf1babbded5c61fbb490e2ef3bf2e6c118db2e40b3c6fdfee3bb9f805",
+      "agent": "bob@org-b",
+      "ack_type": "received",
+      "at": "2026-10-21T12:00:05Z"
+     }
+    },
+    "jcs_hex": "7b22697373756572223a226f72672d62222c226b65795f6964223a226f622d323032362d3130222c226b696e64223a2266656465726174696f6e2e726563656970742e7630222c2272656365697074223a7b2261636b5f74797065223a227265636569766564222c226167656e74223a22626f62406f72672d62222c226174223a22323032362d31302d32315431323a30303a30355a222c226576656e745f6964223a2230623666336331652d313131312d343131312d383131312d303030303030303030303031222c226f726967696e223a226f72672d61222c226f726967696e5f6576656e745f7369675f68617368223a2238356463313633636631626162626465643563363166626234393065326566336266326536633131386462326534306233633666646665653362623966383035227d7d",
+    "sig": "BqlmixNtkZZFjqOO5wSaaqLjaKoq3OT32FOgkEVWveZgQa-uuEn3lf7D4tNs8Qx3V9M1lT73Yli2SAZcrRPDAQ"
+   },
+   {
+    "signed_object": {
+     "kind": "federation.receipt.v0",
+     "issuer": "org-b",
+     "key_id": "ob-2026-10",
+     "receipt": {
+      "event_id": "0b6f3c1e-1111-4111-8111-000000000001",
+      "origin": "org-a",
+      "origin_event_sig_hash": "85dc163cf1babbded5c61fbb490e2ef3bf2e6c118db2e40b3c6fdfee3bb9f805",
+      "agent": "bob@org-b",
+      "ack_type": "applied",
+      "at": "2026-10-21T12:00:05Z"
+     }
+    },
+    "jcs_hex": "7b22697373756572223a226f72672d62222c226b65795f6964223a226f622d323032362d3130222c226b696e64223a2266656465726174696f6e2e726563656970742e7630222c2272656365697074223a7b2261636b5f74797065223a226170706c696564222c226167656e74223a22626f62406f72672d62222c226174223a22323032362d31302d32315431323a30303a30355a222c226576656e745f6964223a2230623666336331652d313131312d343131312d383131312d303030303030303030303031222c226f726967696e223a226f72672d61222c226f726967696e5f6576656e745f7369675f68617368223a2238356463313633636631626162626465643563363166626234393065326566336266326536633131386462326534306233633666646665653362623966383035227d7d",
+    "sig": "VJ5qiF-F_WDNsSCJUstieneJAxCMJzM2vnhrIBP_E5G2d1bgMIbT-jvPU-AyVjsvgXEF6yvQO5mO7qN8kgHIDQ"
+   }
+  ]
+ },
+ "schema_unit": [
+  {
+   "name": "duplicate_key",
+   "layer": "parse",
+   "input": "{\"kind\": \"federation.event.v0\", \"origin\": \"org-a\", \"origin\": \"org-a\", \"key_id\": \"oa-2026-10\", \"event\": {\"event_id\": \"0b6f3c1e-1111-4111-8111-000000000001\", \"type\": \"message\", \"source\": \"alice@org-a\", \"target\": \"bob@org-b\", \"created_at\": \"2026-10-21T12:00:00Z\", \"payload\": {\"text\": \"federation test: he said \\\"héllo\\\", 🤖 path C:\\\\tmp\\nline 2\\ttab\"}}, \"sig\": \"kEOiD0nvDILd2nmY6jozAjMNDG9JU3v6o1GLJIhhtravpigddq7yZtw4LzOdZmBKLdtHcSQkZrE6WONBUe5WAQ\"}",
+   "expect": "duplicate_key"
+  },
+  {
+   "name": "lone_surrogate",
+   "layer": "parse",
+   "input": "{\"kind\": \"federation.event.v0\", \"origin\": \"org-a\", \"key_id\": \"oa-2026-10\", \"event\": {\"event_id\": \"0b6f3c1e-1111-4111-8111-000000000001\", \"type\": \"message\", \"source\": \"alice@org-a\", \"target\": \"bob@org-b\", \"created_at\": \"2026-10-21T12:00:00Z\", \"payload\": {\"text\": \"\\ud800federation test: he said \\\"héllo\\\", 🤖 path C:\\\\tmp\\nline 2\\ttab\"}}, \"sig\": \"kEOiD0nvDILd2nmY6jozAjMNDG9JU3v6o1GLJIhhtravpigddq7yZtw4LzOdZmBKLdtHcSQkZrE6WONBUe5WAQ\"}",
+   "expect": "invalid_unicode"
+  },
+  {
+   "name": "invalid_utf8",
+   "layer": "parse",
+   "input_hex": "7b226b696e64223a202266656465726174696f6e2e6576656e742e7630222c20226f726967696e223a20226f72672d61222c20226b65795f6964223a20226f612d323032362d3130222c20226576656e74223a207b226576656e745f6964223a202230623666336331652d313131312d343131312d383131312d303030303030303030303031222c202274797065223a20226d657373616765222c2022736f75726365223a2022616c696365406f72672d61222c2022746172676574223a2022626f62406f72672d62222c2022637265617465645f6174223a2022323032362d31302d32315431323a30303a30305a222c20227061796c6f6164223a207b2274657874223a202266656465726174696f6e20746573743a2068652073616964205c2268ff6c6c6f5c222c20f09fa496207061746820433a5c5c746d705c6e6c696e6520325c74746162227d7d2c2022736967223a20226b454f6944306e7644494c64326e6d59366a6f7a416a4d4e4447394a553376366f31474c4a4968687472617670696764647137795a7477344c7a4f645a6d424b4c6474486353516b5a724536574f4e42556535574151222c20226578747261223a202279227d",
+   "expect": "invalid_utf8"
+  },
+  {
+   "name": "number_value",
+   "layer": "parse/schema",
+   "input": "{\"kind\": \"federation.event.v0\", \"origin\": \"org-a\", \"key_id\": \"oa-2026-10\", \"event\": {\"event_id\": \"0b6f3c1e-1111-4111-8111-000000000001\", \"type\": \"message\", \"source\": \"alice@org-a\", \"target\": \"bob@org-b\", \"created_at\": 1761048000, \"payload\": {\"text\": \"federation test: he said \\\"héllo\\\", 🤖 path C:\\\\tmp\\nline 2\\ttab\"}}, \"sig\": \"kEOiD0nvDILd2nmY6jozAjMNDG9JU3v6o1GLJIhhtravpigddq7yZtw4LzOdZmBKLdtHcSQkZrE6WONBUe5WAQ\"}",
+   "expect": "value_domain"
+  },
+  {
+   "name": "array_value",
+   "layer": "parse/schema",
+   "input": "{\"kind\": \"federation.event.v0\", \"origin\": \"org-a\", \"key_id\": \"oa-2026-10\", \"event\": {\"event_id\": \"0b6f3c1e-1111-4111-8111-000000000001\", \"type\": \"message\", \"source\": \"alice@org-a\", \"target\": \"bob@org-b\", \"created_at\": \"2026-10-21T12:00:00Z\", \"payload\": {\"text\": [\"x\"]}}, \"sig\": \"kEOiD0nvDILd2nmY6jozAjMNDG9JU3v6o1GLJIhhtravpigddq7yZtw4LzOdZmBKLdtHcSQkZrE6WONBUe5WAQ\"}",
+   "expect": "value_domain"
+  },
+  {
+   "name": "unknown_top_field",
+   "layer": "parse/schema",
+   "input": "{\"kind\": \"federation.event.v0\", \"origin\": \"org-a\", \"key_id\": \"oa-2026-10\", \"event\": {\"event_id\": \"0b6f3c1e-1111-4111-8111-000000000001\", \"type\": \"message\", \"source\": \"alice@org-a\", \"target\": \"bob@org-b\", \"created_at\": \"2026-10-21T12:00:00Z\", \"payload\": {\"text\": \"federation test: he said \\\"héllo\\\", 🤖 path C:\\\\tmp\\nline 2\\ttab\"}}, \"sig\": \"kEOiD0nvDILd2nmY6jozAjMNDG9JU3v6o1GLJIhhtravpigddq7yZtw4LzOdZmBKLdtHcSQkZrE6WONBUe5WAQ\", \"extra\": \"y\"}",
+   "expect": "unknown_field"
+  },
+  {
+   "name": "unknown_payload_field",
+   "layer": "parse/schema",
+   "input": "{\"kind\": \"federation.event.v0\", \"origin\": \"org-a\", \"key_id\": \"oa-2026-10\", \"event\": {\"event_id\": \"0b6f3c1e-1111-4111-8111-000000000001\", \"type\": \"message\", \"source\": \"alice@org-a\", \"target\": \"bob@org-b\", \"created_at\": \"2026-10-21T12:00:00Z\", \"payload\": {\"text\": \"federation test: he said \\\"héllo\\\", 🤖 path C:\\\\tmp\\nline 2\\ttab\", \"n\": \"1\"}}, \"sig\": \"kEOiD0nvDILd2nmY6jozAjMNDG9JU3v6o1GLJIhhtravpigddq7yZtw4LzOdZmBKLdtHcSQkZrE6WONBUe5WAQ\"}",
+   "expect": "unknown_field"
+  },
+  {
+   "name": "address_uppercase",
+   "layer": "parse/schema",
+   "input": "{\"kind\": \"federation.event.v0\", \"origin\": \"org-a\", \"key_id\": \"oa-2026-10\", \"event\": {\"event_id\": \"0b6f3c1e-1111-4111-8111-000000000001\", \"type\": \"message\", \"source\": \"alice@org-a\", \"target\": \"bob@Org-B\", \"created_at\": \"2026-10-21T12:00:00Z\", \"payload\": {\"text\": \"federation test: he said \\\"héllo\\\", 🤖 path C:\\\\tmp\\nline 2\\ttab\"}}, \"sig\": \"kEOiD0nvDILd2nmY6jozAjMNDG9JU3v6o1GLJIhhtravpigddq7yZtw4LzOdZmBKLdtHcSQkZrE6WONBUe5WAQ\"}",
+   "expect": "address_grammar"
+  },
+  {
+   "name": "sig_padding",
+   "layer": "parse/schema",
+   "input": "{\"kind\": \"federation.event.v0\", \"origin\": \"org-a\", \"key_id\": \"oa-2026-10\", \"event\": {\"event_id\": \"0b6f3c1e-1111-4111-8111-000000000001\", \"type\": \"message\", \"source\": \"alice@org-a\", \"target\": \"bob@org-b\", \"created_at\": \"2026-10-21T12:00:00Z\", \"payload\": {\"text\": \"federation test: he said \\\"héllo\\\", 🤖 path C:\\\\tmp\\nline 2\\ttab\"}}, \"sig\": \"kEOiD0nvDILd2nmY6jozAjMNDG9JU3v6o1GLJIhhtravpigddq7yZtw4LzOdZmBKLdtHcSQkZrE6WONBUe5WAQ==\"}",
+   "expect": "non_canonical_base64url"
+  },
+  {
+   "name": "sig_short",
+   "layer": "parse/schema",
+   "input": "{\"kind\": \"federation.event.v0\", \"origin\": \"org-a\", \"key_id\": \"oa-2026-10\", \"event\": {\"event_id\": \"0b6f3c1e-1111-4111-8111-000000000001\", \"type\": \"message\", \"source\": \"alice@org-a\", \"target\": \"bob@org-b\", \"created_at\": \"2026-10-21T12:00:00Z\", \"payload\": {\"text\": \"federation test: he said \\\"héllo\\\", 🤖 path C:\\\\tmp\\nline 2\\ttab\"}}, \"sig\": \"BBOxV5msFQef7Pys8rOqm9ctfK2u1M8HHpRilTBpHbZ0JJAtoGNu7dm6upI-KhPK2Js5cmtRyBFYKf_d\"}",
+   "expect": "signature_length"
+  },
+  {
+   "name": "payload_too_long",
+   "layer": "parse/schema",
+   "input": "{\"kind\": \"federation.event.v0\", \"origin\": \"org-a\", \"key_id\": \"oa-2026-10\", \"event\": {\"event_id\": \"0b6f3c1e-1111-4111-8111-000000000001\", \"type\": \"message\", \"source\": \"alice@org-a\", \"target\": \"bob@org-b\", \"created_at\": \"2026-10-21T12:00:00Z\", \"payload\": {\"text\": \"€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€€\"}}, \"sig\": \"kEOiD0nvDILd2nmY6jozAjMNDG9JU3v6o1GLJIhhtravpigddq7yZtw4LzOdZmBKLdtHcSQkZrE6WONBUe5WAQ\"}",
+   "expect": "payload_too_long",
+   "text_utf8_bytes": 8193
+  },
+  {
+   "name": "missing_sig",
+   "layer": "parse/schema",
+   "input": "{\"kind\": \"federation.event.v0\", \"origin\": \"org-a\", \"key_id\": \"oa-2026-10\", \"event\": {\"event_id\": \"0b6f3c1e-1111-4111-8111-000000000001\", \"type\": \"message\", \"source\": \"alice@org-a\", \"target\": \"bob@org-b\", \"created_at\": \"2026-10-21T12:00:00Z\", \"payload\": {\"text\": \"federation test: he said \\\"héllo\\\", 🤖 path C:\\\\tmp\\nline 2\\ttab\"}}}",
+   "expect": "missing_field"
+  }
+ ],
+ "full_inbound": [
+  {
+   "name": "source_family_mismatch",
+   "layer": "inbound",
+   "envelope": {
+    "kind": "federation.event.v0",
+    "origin": "org-a",
+    "key_id": "oa-2026-10",
+    "event": {
+     "event_id": "0b6f3c1e-1111-4111-8111-000000000001",
+     "type": "message",
+     "source": "alice@org-b",
+     "target": "bob@org-b",
+     "created_at": "2026-10-21T12:00:00Z",
+     "payload": {
+      "text": "federation test: he said \"héllo\", 🤖 path C:\\tmp\nline 2\ttab"
+     }
+    },
+    "sig": "8P4v9p-r-SCYtKnDWJebS2ttz_415YwhAcGESSM5UZ1IcASeOqYzKYIwP3ABIlFZ0yLc1ltjF2Rmo6qj9_tHCA"
+   },
+   "expect": "source_family",
+   "earliest_layer": "schema"
+  },
+  {
+   "name": "target_other_family",
+   "layer": "inbound",
+   "envelope": {
+    "kind": "federation.event.v0",
+    "origin": "org-a",
+    "key_id": "oa-2026-10",
+    "event": {
+     "event_id": "0b6f3c1e-1111-4111-8111-000000000001",
+     "type": "message",
+     "source": "alice@org-a",
+     "target": "bob@org-other",
+     "created_at": "2026-10-21T12:00:00Z",
+     "payload": {
+      "text": "federation test: he said \"héllo\", 🤖 path C:\\tmp\nline 2\ttab"
+     }
+    },
+    "sig": "SzH9Sq2kASsDZPxB1TmXEGewjp4gS9zUwu_BU1KX7f_wze3ICBgfwSS5tSgWqw9Ea-g5UtT14mn2ibg0cO_GCA"
+   },
+   "expect": "target_family",
+   "earliest_layer": "inbound_target"
+  },
+  {
+   "name": "target_unknown_member",
+   "layer": "inbound",
+   "envelope": {
+    "kind": "federation.event.v0",
+    "origin": "org-a",
+    "key_id": "oa-2026-10",
+    "event": {
+     "event_id": "0b6f3c1e-1111-4111-8111-000000000001",
+     "type": "message",
+     "source": "alice@org-a",
+     "target": "nobody@org-b",
+     "created_at": "2026-10-21T12:00:00Z",
+     "payload": {
+      "text": "federation test: he said \"héllo\", 🤖 path C:\\tmp\nline 2\ttab"
+     }
+    },
+    "sig": "mnUCzzV87S39cGcEvia_MXAXC8jfkhjXV_IVS7uFGsrhSVXAfyh0SbIrBlQdMGh4sKNn2Nr9WQQ0NzblUAU1Aw"
+   },
+   "expect": "target_member",
+   "earliest_layer": "inbound_target"
+  },
+  {
+   "name": "type_command",
+   "layer": "inbound",
+   "envelope": {
+    "kind": "federation.event.v0",
+    "origin": "org-a",
+    "key_id": "oa-2026-10",
+    "event": {
+     "event_id": "0b6f3c1e-1111-4111-8111-000000000001",
+     "type": "command",
+     "source": "alice@org-a",
+     "target": "bob@org-b",
+     "created_at": "2026-10-21T12:00:00Z",
+     "payload": {
+      "text": "federation test: he said \"héllo\", 🤖 path C:\\tmp\nline 2\ttab"
+     }
+    },
+    "sig": "xgMh5801Yj249bEjecY2y-7wkEiyWHVZGBaAMexcrNLBmSggjLYjgl86NVyp3bJfzYwBekc-Rwsu-aiZwXWECw"
+   },
+   "expect": "type_whitelist",
+   "earliest_layer": "schema"
+  },
+  {
+   "name": "type_grant",
+   "layer": "inbound",
+   "envelope": {
+    "kind": "federation.event.v0",
+    "origin": "org-a",
+    "key_id": "oa-2026-10",
+    "event": {
+     "event_id": "0b6f3c1e-1111-4111-8111-000000000001",
+     "type": "grant",
+     "source": "alice@org-a",
+     "target": "bob@org-b",
+     "created_at": "2026-10-21T12:00:00Z",
+     "payload": {
+      "text": "federation test: he said \"héllo\", 🤖 path C:\\tmp\nline 2\ttab"
+     }
+    },
+    "sig": "KIoMYOZzhQ20NXAkGrW8J6N1VccF2mv8bWUviSyRJ9dndHIcdHCip3jyA_7Pzv3e8zVmJxPhqaGA4iwvFcrpBA"
+   },
+   "expect": "type_whitelist",
+   "earliest_layer": "schema"
+  },
+  {
+   "name": "target_broadcast",
+   "layer": "inbound",
+   "envelope": {
+    "kind": "federation.event.v0",
+    "origin": "org-a",
+    "key_id": "oa-2026-10",
+    "event": {
+     "event_id": "0b6f3c1e-1111-4111-8111-000000000001",
+     "type": "message",
+     "source": "alice@org-a",
+     "target": "*@org-b",
+     "created_at": "2026-10-21T12:00:00Z",
+     "payload": {
+      "text": "federation test: he said \"héllo\", 🤖 path C:\\tmp\nline 2\ttab"
+     }
+    },
+    "sig": "YGQcoZ0ajAMJbzp0rwDuuoGv47sFTR1--uXkCQBcvaAMD8oqKmRHKlPZ3flG0cuJQPtKVFcDSFduLdiLNTg8Dg"
+   },
+   "expect": "address_grammar",
+   "earliest_layer": "schema"
+  },
+  {
+   "name": "tamper_no_resign",
+   "layer": "inbound",
+   "envelope": {
+    "kind": "federation.event.v0",
+    "origin": "org-a",
+    "key_id": "oa-2026-10",
+    "event": {
+     "event_id": "0b6f3c1e-1111-4111-8111-000000000001",
+     "type": "message",
+     "source": "alice@org-a",
+     "target": "bob@org-b",
+     "created_at": "2026-10-21T12:00:00Z",
+     "payload": {
+      "text": "tampered text"
+     }
+    },
+    "sig": "kEOiD0nvDILd2nmY6jozAjMNDG9JU3v6o1GLJIhhtravpigddq7yZtw4LzOdZmBKLdtHcSQkZrE6WONBUe5WAQ"
+   },
+   "expect": "signature_invalid",
+   "earliest_layer": "signature"
+  },
+  {
+   "name": "unknown_key_id",
+   "layer": "inbound",
+   "envelope": {
+    "kind": "federation.event.v0",
+    "origin": "org-a",
+    "key_id": "oa-unknown",
+    "event": {
+     "event_id": "0b6f3c1e-1111-4111-8111-000000000001",
+     "type": "message",
+     "source": "alice@org-a",
+     "target": "bob@org-b",
+     "created_at": "2026-10-21T12:00:00Z",
+     "payload": {
+      "text": "federation test: he said \"héllo\", 🤖 path C:\\tmp\nline 2\ttab"
+     }
+    },
+    "sig": "ULB5mpxCHwtRcg3ONYvNoIxvPdaxs4EOE-69TCVzZjsr1hN0eZdd9lAvOVsaw8J_h24ph3el2K9itUq5-QxRBw"
+   },
+   "expect": "unregistered_key",
+   "earliest_layer": "registry_lookup"
+  },
+  {
+   "name": "receipt_wrong_issuer_org_test",
+   "layer": "receipt_inbound",
+   "envelope": {
+    "kind": "federation.receipt.v0",
+    "issuer": "org-test",
+    "key_id": "ot-2026-10",
+    "receipt": {
+     "event_id": "0b6f3c1e-1111-4111-8111-000000000001",
+     "origin": "org-a",
+     "origin_event_sig_hash": "85dc163cf1babbded5c61fbb490e2ef3bf2e6c118db2e40b3c6fdfee3bb9f805",
+     "agent": "bob@org-b",
+     "ack_type": "received",
+     "at": "2026-10-21T12:00:05Z"
+    },
+    "sig": "w1j5YhylxT-q-2B3POpTZfZy-l3-FWnE7-BKgDEyCCCbf3_WK6tsHLEZU9ihRVxJltQwHEwDTkBzUmDpN6rxCg"
+   },
+   "expect": "issuer_not_target_family",
+   "earliest_layer": "receipt_binding"
+  },
+  {
+   "name": "receipt_wrong_agent",
+   "layer": "receipt_inbound",
+   "envelope": {
+    "kind": "federation.receipt.v0",
+    "issuer": "org-b",
+    "key_id": "ob-2026-10",
+    "receipt": {
+     "event_id": "0b6f3c1e-1111-4111-8111-000000000001",
+     "origin": "org-a",
+     "origin_event_sig_hash": "85dc163cf1babbded5c61fbb490e2ef3bf2e6c118db2e40b3c6fdfee3bb9f805",
+     "agent": "carol@org-b",
+     "ack_type": "received",
+     "at": "2026-10-21T12:00:05Z"
+    },
+    "sig": "XAy-LXI4GBoRHCCjmWjgvKd9fZ6_XMyRybEJdYkp2yKat48x29AUwnmeEykQ3ubBt9PanRLIrXq4F-s50YIJDA"
+   },
+   "expect": "agent_mismatch",
+   "earliest_layer": "receipt_binding"
+  },
+  {
+   "name": "receipt_wrong_hash",
+   "layer": "receipt_inbound",
+   "envelope": {
+    "kind": "federation.receipt.v0",
+    "issuer": "org-b",
+    "key_id": "ob-2026-10",
+    "receipt": {
+     "event_id": "0b6f3c1e-1111-4111-8111-000000000001",
+     "origin": "org-a",
+     "origin_event_sig_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+     "agent": "bob@org-b",
+     "ack_type": "received",
+     "at": "2026-10-21T12:00:05Z"
+    },
+    "sig": "Mb6TmW1ikF14m5xdOAWaWsgBPLy6qgAoUPj5to7OztjdDRfqaNVtb3lGT-J0wWf0-4PUdaVEQCuNNsevJGmyBQ"
+   },
+   "expect": "hash_mismatch",
+   "earliest_layer": "receipt_binding"
+  },
+  {
+   "name": "receipt_unknown_event",
+   "layer": "receipt_inbound",
+   "envelope": {
+    "kind": "federation.receipt.v0",
+    "issuer": "org-b",
+    "key_id": "ob-2026-10",
+    "receipt": {
+     "event_id": "0b6f3c1e-1111-4111-8111-00000000ffff",
+     "origin": "org-a",
+     "origin_event_sig_hash": "85dc163cf1babbded5c61fbb490e2ef3bf2e6c118db2e40b3c6fdfee3bb9f805",
+     "agent": "bob@org-b",
+     "ack_type": "received",
+     "at": "2026-10-21T12:00:05Z"
+    },
+    "sig": "qykzS5pYyhuPypQeEeigvmG9TPjgDeVNgwDz1i2U8IG8VY1rQSdnvrXUW_6eZQ8Cmokjp73m3Ja23TTsCu_yDg"
+   },
+   "expect": "unknown_event",
+   "earliest_layer": "receipt_binding"
+  }
+ ],
+ "strict_verify": {
+  "note": "Non-canonical S, small-order public key, small-order R, non-canonical point encodings: generated with the frozen library and committed in strict_verify_v0.json."
+ },
+ "todo_before_acceptance": [
+  "strict_verify: fixed bytes and expected results",
+  "unit tests for registry public-key length errors",
+  "full inbound test fixture (receiving family, registry keys, allowed members, existing outbound record, fresh state per case)",
+  "payload boundary pair: 8192 UTF-8 bytes accepted, 8193 rejected"
+ ]
+}

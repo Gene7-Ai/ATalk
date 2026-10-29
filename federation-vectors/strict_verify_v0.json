@@ -1,0 +1,64 @@
+{
+  "note": "Strict-verify negative vectors v0 (spec 4.5, class 4). message_hex = the JCS bytes of the positive message in vectors_v0.json; the key is derived from the public seed sha256('TEST ONLY org-a'), for testing only. Generated with the frozen implementation (see the frozen field); each case gives the raw bytes hex, the check that rejects it, and the expected error category.",
+  "message_hex": "7b226576656e74223a7b22637265617465645f6174223a22323032362d31302d32315431323a30303a30305a222c226576656e745f6964223a2230623666336331652d313131312d343131312d383131312d303030303030303030303031222c227061796c6f6164223a7b2274657874223a2266656465726174696f6e20746573743a2068652073616964205c2268c3a96c6c6f5c222c20f09fa496207061746820433a5c5c746d705c6e6c696e6520325c74746162227d2c22736f75726365223a22616c696365406f72672d61222c22746172676574223a22626f62406f72672d62222c2274797065223a226d657373616765227d2c226b65795f6964223a226f612d323032362d3130222c226b696e64223a2266656465726174696f6e2e6576656e742e7630222c226f726967696e223a226f72672d61227d",
+  "frozen": {
+    "python": "3.11.0rc1",
+    "nacl": "1.6.2",
+    "libsodium": null,
+    "libsodium_note": "not exposed by the PyNaCl 1.6.2 ABI; pinned by the PyNaCl 1.6.2 wheel",
+    "strict_checks": [
+      "signature_length",
+      "public_key_length",
+      "s_below_L",
+      "r_canonical_roundtrip",
+      "a_canonical_roundtrip",
+      "r_not_small_order",
+      "a_not_small_order",
+      "nacl_group_equation"
+    ]
+  },
+  "cases": [
+    {
+      "name": "control_valid",
+      "rejects": null,
+      "expect": "valid",
+      "public_key_hex": "66d3cd0e2745d4c6e6f41507efb84d1db11512c20c6ef864b6e33b20b7f29748",
+      "sig_hex": "9043a20f49ef0c82ddda7998ea3a3302330d0c6f49537bfaa3518b248861b6b6afa6281d76aef266dc382f339d66604a2ddb4771242466b13a58e34151ee5601"
+    },
+    {
+      "name": "non_canonical_s",
+      "rejects": "S = LE(sig[32:]) = S_valid + L >= group order L",
+      "expect": "non_canonical_s",
+      "public_key_hex": "66d3cd0e2745d4c6e6f41507efb84d1db11512c20c6ef864b6e33b20b7f29748",
+      "sig_hex": "9043a20f49ef0c82ddda7998ea3a3302330d0c6f49537bfaa3518b248861b6b69c7a1e7a901105bfb2d526d67b603f5f2ddb4771242466b13a58e34151ee5611"
+    },
+    {
+      "name": "small_order_r",
+      "rejects": "R = identity point (order 1), [8]R == identity",
+      "expect": "small_order_r",
+      "public_key_hex": "66d3cd0e2745d4c6e6f41507efb84d1db11512c20c6ef864b6e33b20b7f29748",
+      "sig_hex": "0100000000000000000000000000000000000000000000000000000000000000afa6281d76aef266dc382f339d66604a2ddb4771242466b13a58e34151ee5601"
+    },
+    {
+      "name": "small_order_a",
+      "rejects": "A (public key) = identity point, [8]A == identity",
+      "expect": "small_order_a",
+      "public_key_hex": "0100000000000000000000000000000000000000000000000000000000000000",
+      "sig_hex": "9043a20f49ef0c82ddda7998ea3a3302330d0c6f49537bfaa3518b248861b6b6afa6281d76aef266dc382f339d66604a2ddb4771242466b13a58e34151ee5601"
+    },
+    {
+      "name": "non_canonical_r",
+      "rejects": "R encoding has y = p (>= field prime 2^255-19)",
+      "expect": "non_canonical_r",
+      "public_key_hex": "66d3cd0e2745d4c6e6f41507efb84d1db11512c20c6ef864b6e33b20b7f29748",
+      "sig_hex": "edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffafa6281d76aef266dc382f339d66604a2ddb4771242466b13a58e34151ee5601"
+    },
+    {
+      "name": "non_canonical_a",
+      "rejects": "A encoding has y = p (>= field prime 2^255-19)",
+      "expect": "non_canonical_a",
+      "public_key_hex": "edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "sig_hex": "9043a20f49ef0c82ddda7998ea3a3302330d0c6f49537bfaa3518b248861b6b6afa6281d76aef266dc382f339d66604a2ddb4771242466b13a58e34151ee5601"
+    }
+  ]
+}

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import errno
+import hashlib
 import json
 import logging
 import os
@@ -10,14 +11,26 @@ import shutil
 import sqlite3
 import tempfile
 import threading
+import uuid
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from .core import AtalkStore, EventIdConflict, event_to_dict
+from .federation import schema as fed_schema
+from .federation.canonical import FederationError, canonical_bytes, decode_strict
+from .federation.runtime import FederationConfig, FederationRuntime
+from .federation.store import OutboxFull
 from .raftsql import RaftSQLStore
 from .storage import AtalkStorage
+
+# F1 (r4): no federation module imported here pulls in PyNaCl at import time
+# (runtime.py defers its crypto imports), so the zero-dependency package
+# imports and starts with federation simply off.  The strict-verify call
+# sites below import ed25519strict lazily: they only execute when a
+# FederationRuntime is active, and activation (FederationRuntime.build)
+# already gates on the crypto backend being importable.
 
 
 MESSAGE_ACL_PATH = os.environ.get("ATALK_MESSAGE_ACL", "/etc/atalk/message-acl.json")
@@ -95,6 +108,20 @@ class RequestTooLarge(Exception):
     """Raised when a request body exceeds the configured maximum size."""
 
 
+def fed_error_status(exc: FederationError) -> int:
+    """HTTP status for a federation rejection.  Design v0.4.3 pins this
+    mapping (documented in atalk/federation/README.md): format/parse/schema
+    -> 400, size -> 413, registry/signature/binding -> 403, inbound semantics
+    -> 422.  All are permanent for the sender."""
+    if exc.category == "body_too_large":
+        return 413
+    if exc.layer == "inbound":
+        return 422
+    if exc.layer in ("registry", "signature", "receipt_binding"):
+        return 403
+    return 400
+
+
 def sqlite_primary_code(exc: BaseException) -> int | None:
     code = getattr(exc, "sqlite_errorcode", None)
     return (int(code) & 0xFF) if isinstance(code, int) else None
@@ -168,11 +195,22 @@ class WakeHub:
                 if not queues:
                     self._queues.pop(agent, None)
 
-    def notify(self, agent: str, item: dict) -> None:
+    def notify(self, agent: str, item: dict) -> bool:
+        """r4 F6: True ONLY when at least one live subscribed queue accepted
+        the item without dropping.  A no-op (offline agent, no queue) and an
+        overflow drop are never reported as a delivery; callers must not
+        mark work complete on False."""
         with self._lock:
             queues = list(self._queues.get(agent, set()))
+        if not queues:
+            return False
+        delivered = True
         for q in queues:
-            self._offer(q, item)
+            try:
+                q.put_nowait(item)
+            except queue.Full:
+                delivered = False
+        return delivered
 
     def notify_all(self, item: dict) -> None:
         with self._lock:
@@ -283,12 +321,92 @@ class AtalkHandler(BaseHTTPRequestHandler):
                 if ev.target != "*" and agent not in (ev.source, ev.target):
                     return self.send_error_json(403, "not a party to this event")
             return self.send_json(self.server.store.acks_for(event_id))
+        if parsed.path == "/federation/notifications":
+            # r4 F6: durable pull path for federation notifications.  Flag
+            # off (or an unknown path) this falls through to the same 404 as
+            # every other unknown route.
+            fed = self.server.federation
+            if fed is None:
+                return self.send_error_json(404, "not found")
+            agent = first(qs, "agent")
+            if agent:
+                if self.server.store.auth_required() and not self.authorized(agent):
+                    return self.send_error_json(403, "agent token rejected")
+                return self.send_json(_notification_views(
+                    fed.store.notification_hints_for(agent)))
+            peer = first(qs, "peer")
+            if not peer:
+                return self.send_error_json(400, "agent or peer required")
+            if self.server.store.auth_required() and not self.authorized(peer, {"full"}):
+                return self.send_error_json(403, "full peer token required")
+            return self.send_json(_notification_views(
+                fed.store.operator_notification_hints()))
         return self.send_error_json(404, "not found")
 
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
+        fed = self.server.federation
+        if fed is not None and parsed.path in ("/federation/inbox", "/federation/receipts"):
+            try:
+                if parsed.path == "/federation/inbox":
+                    return self.federation_inbox(fed)
+                return self.federation_receipts(fed)
+            except FederationError as exc:
+                return self.send_json(
+                    {"status": "rejected", "reason": exc.category},
+                    status=fed_error_status(exc))
+            except sqlite3.OperationalError as exc:
+                classified = classify_storage_error(exc, self.server.store)
+                if classified is None:
+                    logging.exception("unhandled SQLite error in POST %s", parsed.path)
+                    return self.send_json({"status": "rejected", "reason": "internal"},
+                                          status=500)
+                public_error, status, probe_errno = classified
+                logging.warning(
+                    "storage write failure during POST %s: error=%s probe_errno=%r",
+                    parsed.path, public_error, probe_errno)
+                self.server.mark_storage_failure(public_error)
+                return self.send_json({"status": "rejected", "reason": public_error},
+                                      status=status)
+            except Exception:
+                logging.exception("unhandled error in POST %s", parsed.path)
+                return self.send_json({"status": "rejected", "reason": "internal"},
+                                      status=500)
         try:
             body = self.read_json()
+            if parsed.path == "/federation/notifications/ack":
+                # r4 F6: acknowledge pulled notification hints.  An agent ack
+                # touches only that agent's rows; an operator ack (no agent,
+                # full-scope peer) touches only operator rows.
+                fed = self.server.federation
+                if fed is None:
+                    return self.send_error_json(404, "not found")
+                intent_ids = body.get("intent_ids")
+                if (not isinstance(intent_ids, list) or not intent_ids
+                        or len(intent_ids) > 100
+                        or not all(isinstance(x, str) for x in intent_ids)):
+                    raise ValueError(
+                        "intent_ids must be a list of 1-100 strings")
+                auth = self.headers.get("Authorization", "")
+                token = auth.removeprefix("Bearer ").strip() or body.get("token")
+                agent = body.get("agent")
+                if agent is not None:
+                    if not isinstance(agent, str) or not agent:
+                        raise ValueError("agent must be a non-empty string")
+                    if (self.server.store.auth_required()
+                            and self.server.store.token_scope(agent, token) is None):
+                        raise PermissionError("agent token rejected")
+                    acked = fed.store.ack_notification_hints(intent_ids, agent)
+                else:
+                    peer = body.get("peer")
+                    if not isinstance(peer, str) or not peer:
+                        raise ValueError(
+                            "peer required to ack operator notifications")
+                    if (self.server.store.auth_required()
+                            and not self.authorized(peer, {"full"})):
+                        raise PermissionError("full peer token required")
+                    acked = fed.store.ack_notification_hints(intent_ids, None)
+                return self.send_json({"acked": acked})
             if parsed.path == "/device-tokens":
                 peer = body["peer_id"]
                 if self.server.store.auth_required() and not self.authorized(peer, {"full"}):
@@ -328,6 +446,10 @@ class AtalkHandler(BaseHTTPRequestHandler):
                 acl_reason = self.server.message_acl.check(body["source"], body["target"])
                 if acl_reason:
                     raise PermissionError(acl_reason)
+                if fed is not None and body["target"] != "*":
+                    family = fed.foreign_family(body["target"])
+                    if family is not None:
+                        return self.federation_send(fed, body, family)
                 # An idempotent retry of an already-accepted event must not be
                 # rejected by the backlog gate; only genuinely new events count
                 # against the limit.
@@ -368,6 +490,30 @@ class AtalkHandler(BaseHTTPRequestHandler):
                 token = auth.removeprefix("Bearer ").strip() or body.get("token")
                 if self.server.store.auth_required() and self.server.store.token_scope(body["agent_id"], token) != "full":
                     raise PermissionError("agent token rejected")
+                if fed is not None:
+                    inb = fed.store.get_inbound(event_id=body["event_id"])
+                    if inb is not None:
+                        # Spec 6.1: only the recipient of a federation-inbound
+                        # event may ACK it (0.9 Appendix A deviation is fixed
+                        # on this path only; local events keep current behavior).
+                        # agent_id is the local peer id (it also authenticates).
+                        target_agent = str(inb["target"]).rsplit("@", 1)[0]
+                        if body["agent_id"] != target_agent:
+                            raise PermissionError("only the recipient of a federation event may ack it")
+                        if body["ack_type"] not in ("received", "applied"):
+                            raise ValueError("ack_type must be received or applied")
+                        stored_sig = decode_strict(inb["sig"], 64)
+                        fed.store.ack_with_receipt_intent(
+                            event_id=body["event_id"], agent_id=body["agent_id"],
+                            ack_type=body["ack_type"], detail=body.get("detail"),
+                            receipt_agent=inb["target"], origin=inb["origin"],
+                            origin_event_sig_hash=hashlib.sha256(stored_sig).hexdigest(),
+                            issuer=fed.identity.family,
+                            issuer_key_id=fed.identity.key_id)
+                        fed.run_post_commit_hook()
+                        fed.hint_notifications()
+                        self.server.mark_storage_success()
+                        return self.send_json({"ok": True})
                 self.server.store.ack(body["event_id"], body["agent_id"], body["ack_type"], body.get("detail"))
                 self.server.mark_storage_success()
                 return self.send_json({"ok": True})
@@ -447,6 +593,252 @@ class AtalkHandler(BaseHTTPRequestHandler):
 
     max_body_bytes = 1 << 20  # 1 MiB cap on request bodies
 
+    # ------------------------------------------------- federation endpoints
+    # Spec 4.4/5.3/6.5: the raw-byte limit applies BEFORE any parsing, and
+    # compression is rejected, so these endpoints never use read_json().
+
+    def read_fed_body(self) -> bytes:
+        length_header = self.headers.get("Content-Length")
+        if length_header is None:
+            raise FederationError("request", "length_required")
+        try:
+            length = int(length_header)
+        except ValueError:
+            raise FederationError("request", "invalid_length") from None
+        if length < 0:
+            raise FederationError("request", "invalid_length")
+        if length > fed_schema.REQUEST_BODY_LIMIT:
+            raise FederationError("request", "body_too_large")
+        # Bound the raw read: a sender that gives up mid-body must not leave a
+        # handler thread blocked forever.  Federation paths only; restored
+        # immediately after the read so the rest of the connection is untouched.
+        self.connection.settimeout(30)
+        try:
+            raw = self.rfile.read(length)
+        except OSError:
+            raise FederationError("request", "invalid_json", "truncated body") from None
+        finally:
+            try:
+                self.connection.settimeout(None)
+            except OSError:
+                pass
+        if len(raw) < length:
+            raise FederationError("request", "invalid_json", "truncated body")
+        return raw
+
+    def _reject_encoding(self) -> bool:
+        if fed_schema.content_encoding_rejected(self.headers.get("Content-Encoding")):
+            self.send_json({"status": "rejected", "reason": "content_encoding_rejected"},
+                           status=400)
+            return True
+        return False
+
+    def federation_inbox(self, fed: FederationRuntime) -> None:
+        if not fed.allow_conn():
+            return self.send_json({"status": "rejected", "reason": "rate_limited_conn"},
+                                  status=429)
+        try:
+            raw = self.read_fed_body()
+        except FederationError as exc:
+            return self.send_json({"status": "rejected", "reason": exc.category},
+                                  status=fed_error_status(exc))
+        if self._reject_encoding():
+            return
+        try:
+            env = fed_schema.parse_event(raw)
+        except FederationError as exc:
+            return self.send_json({"status": "rejected", "reason": exc.category},
+                                  status=fed_error_status(exc))
+        signed = env.signed
+        record = fed.registry.lookup(signed["origin"], signed["key_id"])
+        if record is None:
+            return self.send_json({"status": "rejected", "reason": "unregistered_key"},
+                                  status=403)
+        try:
+            from .federation import ed25519strict  # lazy: see module note (F1)
+
+            ed25519strict.verify(record.public_key_bytes, env.signed_bytes, env.sig)
+        except FederationError as exc:
+            return self.send_json({"status": "rejected", "reason": exc.category}, status=403)
+        origin = signed["origin"]
+        if not fed.allow_family(origin):
+            return self.send_json({"status": "rejected", "reason": "rate_limited_family"},
+                                  status=429)
+        ev = signed["event"]
+        # Grammar-validated by the schema; exactly one "@".
+        agent, family = ev["target"].split("@")
+        if family != fed.identity.family:
+            return self.send_json({"status": "rejected", "reason": "target_family"},
+                                  status=422)
+        if not fed.store.is_local_member(agent):
+            return self.send_json({"status": "rejected", "reason": "target_member"},
+                                  status=422)
+        # source family == verified origin is enforced at the schema layer
+        # (allowed earliest layer per spec 4.5).
+        status, row = fed.store.receive_event(
+            origin=origin, event_id=ev["event_id"],
+            event_jcs=canonical_bytes(ev),
+            signed_json=canonical_bytes(signed).decode("utf-8"), sig=env.sig_str,
+            reg_family=record.family, reg_key_id=record.key_id,
+            reg_public_key=record.public_key, source_addr=ev["source"],
+            target_addr=ev["target"], target_local=agent, type=ev["type"],
+            payload={"text": ev["payload"]["text"]}, created_at=ev["created_at"])
+        if status == "conflict":
+            return self.send_json({"status": "conflict"}, status=409)
+        # Crash seam: raising here leaves the commit in place and the sender
+        # sees a transient failure; the retry is absorbed by dedup (spec 6.6/7).
+        fed.run_post_commit_hook()
+        if row["delivery_state"] == "pending":
+            fed.deliver_pending()
+        return self.send_json({"status": "stored" if status == "stored" else "duplicate"},
+                              status=200)
+
+    def federation_receipts(self, fed: FederationRuntime) -> None:
+        if not fed.allow_conn():
+            return self.send_json({"status": "rejected", "reason": "rate_limited_conn"},
+                                  status=429)
+        try:
+            raw = self.read_fed_body()
+        except FederationError as exc:
+            return self.send_json({"status": "rejected", "reason": exc.category},
+                                  status=fed_error_status(exc))
+        if self._reject_encoding():
+            return
+        try:
+            env = fed_schema.parse_receipt(raw)
+        except FederationError as exc:
+            return self.send_json({"status": "rejected", "reason": exc.category},
+                                  status=fed_error_status(exc))
+        rc = env.signed["receipt"]
+        # Spec 6.5.2: the event must be one WE sent, and receipt.origin is us.
+        out = fed.store.get_outbound(rc["event_id"])
+        if out is None:
+            return self.send_json({"status": "rejected", "reason": "unknown_event"},
+                                  status=403)
+        if rc["origin"] != fed.identity.family:
+            return self.send_json({"status": "rejected", "reason": "origin_mismatch"},
+                                  status=403)
+        # Spec 6.5.3: issuer must equal the original target's family, verified
+        # with that family's registered key.  Checked BEFORE the registry so a
+        # valid signature from a registered-but-wrong family cannot pass.
+        # (`issuer` is a top-level signed field, not inside `receipt`, §4.3.)
+        issuer = env.signed["issuer"]
+        target_family = str(out["target"]).rsplit("@", 1)[1]
+        if issuer != target_family:
+            return self.send_json(
+                {"status": "rejected", "reason": "issuer_not_target_family"}, status=403)
+        record = fed.registry.lookup(issuer, env.signed["key_id"])
+        if record is None:
+            return self.send_json({"status": "rejected", "reason": "unregistered_key"},
+                                  status=403)
+        try:
+            from .federation import ed25519strict  # lazy: see module note (F1)
+
+            ed25519strict.verify(record.public_key_bytes, env.signed_bytes, env.sig)
+        except FederationError as exc:
+            return self.send_json({"status": "rejected", "reason": exc.category}, status=403)
+        if not fed.allow_family(issuer):
+            return self.send_json({"status": "rejected", "reason": "rate_limited_family"},
+                                  status=429)
+        # Spec 6.5.4: hash of OUR immutable stored original's signature bytes.
+        stored_sig = decode_strict(out["sig"], 64)
+        if rc["origin_event_sig_hash"] != hashlib.sha256(stored_sig).hexdigest():
+            return self.send_json({"status": "rejected", "reason": "hash_mismatch"},
+                                  status=403)
+        # Spec 6.5.5: the receipt names the original event's full target.
+        if rc["agent"] != out["target"]:
+            return self.send_json({"status": "rejected", "reason": "agent_mismatch"},
+                                  status=403)
+        status, _notification = fed.store.record_receipt_in(
+            event_id=rc["event_id"], agent=rc["agent"], ack_type=rc["ack_type"],
+            issuer=issuer, issuer_key_id=env.signed["key_id"],
+            signed_json=canonical_bytes(env.signed).decode("utf-8"), sig=env.sig_str,
+            notify_agent=out["source_local"],
+            notify_detail={"origin": out["origin"], "target": out["target"],
+                           "origin_event_sig_hash": rc["origin_event_sig_hash"]})
+        fed.run_post_commit_hook()
+        fed.hint_notifications()
+        return self.send_json({"status": status}, status=200)
+
+    def federation_send(self, fed: FederationRuntime, body: dict, family: str) -> None:
+        """Outbound federation path of POST /events (flag on only, spec 5.1)."""
+        record = fed.registry.receipts_peer(family)
+        if record is None:
+            return self.send_error_json(
+                400, f"unregistered federation target family: {family}")
+        type_ = body.get("type", "message")
+        if type_ not in ("message", "reply"):
+            return self.send_error_json(
+                400, "federation carries only message and reply events")
+        payload = body.get("payload") or {}
+        if not isinstance(payload, dict) or not isinstance(payload.get("text"), str):
+            return self.send_error_json(400, "federation payload requires a string 'text'")
+        extra = set(payload) - {"text", "in_reply_to", "auto"}
+        if extra:
+            return self.send_error_json(
+                400, f"federation payload does not support field(s): {', '.join(sorted(extra))}")
+        in_reply_to = payload.get("in_reply_to")
+        if in_reply_to is not None:
+            if type_ != "reply":
+                return self.send_error_json(400, "in_reply_to requires type=reply")
+            if not isinstance(in_reply_to, str) or not fed_schema.UUID_RE.match(in_reply_to):
+                return self.send_error_json(400, "in_reply_to must be a lowercase UUID")
+        event_id = body.get("event_id") or str(uuid.uuid4())
+        if not fed_schema.UUID_RE.match(event_id):
+            return self.send_error_json(400, "federation event_id must be a lowercase UUID")
+        source = body["source"]
+        if "@" in source:
+            return self.send_error_json(
+                400, "federation source must be a bare local peer id")
+        try:
+            envelope = fed.compose_event(
+                source_local=source, target=body["target"], type=type_,
+                text=payload["text"], event_id=event_id, in_reply_to=in_reply_to)
+        except FederationError as exc:
+            return self.send_error_json(
+                400, f"federation envelope rejected: {exc.category}")
+        try:
+            enqueued = fed.store.enqueue_outbound(
+                event_id=event_id, origin=fed.identity.family,
+                origin_key_id=fed.identity.key_id, source_local=source,
+                source_addr=f"{source}@{fed.identity.family}", target=body["target"],
+                target_family=family, type=type_,
+                signed_json=canonical_bytes(
+                    {k: v for k, v in envelope.items() if k != "sig"}).decode("utf-8"),
+                sig=envelope["sig"], envelope_json=canonical_bytes(envelope),
+                outbox_cap=fed.config.outbox_cap)
+        except OutboxFull as exc:
+            return self.send_error_json(429, str(exc))
+        row = fed.store.get_outbound(event_id)
+        # r4 F5: a repeated event_id belongs to the stored original.  Compare
+        # the immutable caller intent (source/target/type/text/reply link —
+        # the freshly generated timestamp is excluded for a legitimate
+        # retry); a mismatch is a 409 conflict and a genuine retry is
+        # answered EXCLUSIVELY from the stored original, never a mix of the
+        # saved envelope and this request's payload.
+        stored_event = json.loads(row["signed_json"])["event"]
+        if enqueued == "existing" and (
+                row["source_local"], row["target"], row["type"],
+                stored_event["payload"]["text"],
+                stored_event.get("in_reply_to")) != (
+                source, body["target"], type_, payload["text"], in_reply_to):
+            return self.send_error_json(
+                409, "event_id already used for a different federation event")
+        item_payload = {"text": stored_event["payload"]["text"]}
+        if stored_event.get("in_reply_to") is not None:
+            item_payload["in_reply_to"] = stored_event["in_reply_to"]
+        item = {
+            "event_id": event_id,
+            "source": row["source_addr"],
+            "target": row["target"],
+            "type": row["type"],
+            "created_at": stored_event["created_at"],
+            "payload": item_payload,
+            "requires_ack": True,
+            "federation": {"status": row["status"], "target_family": family},
+        }
+        return self.send_json(item, status=201)
+
     def read_json(self) -> dict:
         length = int(self.headers.get("Content-Length", "0"))
         if length < 0:
@@ -486,7 +878,8 @@ class AtalkHandler(BaseHTTPRequestHandler):
 
 
 class AtalkHTTPServer(ThreadingHTTPServer):
-    def __init__(self, address, store: AtalkStorage, wake: WakeHub, max_inbox_depth: int = 1000):
+    def __init__(self, address, store: AtalkStorage, wake: WakeHub, max_inbox_depth: int = 1000,
+                 federation_config: FederationConfig | None = None):
         super().__init__(address, AtalkHandler)
         self.store = store
         self.wake = wake
@@ -495,6 +888,22 @@ class AtalkHTTPServer(ThreadingHTTPServer):
         self._storage_health_lock = threading.Lock()
         self._storage_error: str | None = None
         self._storage_error_since: str | None = None
+        # Federation is OFF unless the flag AND the peers/identity files load
+        # (fail closed); self.federation stays None and every endpoint behaves
+        # exactly as before.
+        config = federation_config or FederationConfig.from_env()
+        runtime = FederationRuntime.build(config, store)
+        self.federation: FederationRuntime | None = None
+        if runtime is not None:
+            runtime.set_wake(wake)
+            self.federation = runtime
+            runtime.start()
+
+    def server_close(self) -> None:
+        if self.federation is not None:
+            self.federation.stop()
+            self.federation = None
+        super().server_close()
 
     def process_request_thread(self, request, client_address) -> None:
         """Release request-thread-local storage resources when a handler exits."""
@@ -570,6 +979,13 @@ class AtalkHTTPServer(ThreadingHTTPServer):
 def first(qs: dict[str, list[str]], key: str) -> str | None:
     values = qs.get(key)
     return values[0] if values else None
+
+
+def _notification_views(rows) -> list[dict]:
+    return [{"intent_id": r["intent_id"], "kind": r["kind"], "agent": r["agent"],
+             "event_id": r["event_id"],
+             "detail": json.loads(r["detail_json"] or "{}"),
+             "created_at": r["created_at"]} for r in rows]
 
 
 def make_parser() -> argparse.ArgumentParser:

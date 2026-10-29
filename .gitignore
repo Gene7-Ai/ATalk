@@ -11,3 +11,5 @@ clients/desktop/config.json
 /dist/
 /build/
 *.egg-info/
+.venv/
+.venv312/

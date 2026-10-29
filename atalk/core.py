@@ -75,6 +75,7 @@ class AtalkStore:
         self._ensure_peer_capability_columns()
         self._migrate_peer_tokens()
         self._ensure_token_schema()
+        self._ensure_notification_ack_column()
 
     def _new_conn(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path, isolation_level=None, check_same_thread=False)
@@ -109,14 +110,60 @@ class AtalkStore:
             "SELECT peer_id, token_hash, created_at FROM peers WHERE token_hash IS NOT NULL"
         )
 
+    def _ensure_columns(self, table: str, additions: dict[str, str]) -> None:
+        """r6 #5: add each missing column with the PRAGMA check and the ALTER
+        under ONE BEGIN IMMEDIATE, so two processes initializing the same
+        SQLite file serialize instead of racing (the loser used to die with
+        "duplicate column name: ..." — the reviewer's deterministic barrier repro).
+        A duplicate-column error is still tolerated, but ONLY after
+        re-checking that the target schema is actually complete; a genuinely
+        absent column keeps failing startup."""
+        with self.lock:
+            conn = self.conn
+            conn.execute("BEGIN IMMEDIATE")
+            in_txn = True
+            try:
+                columns = {row["name"]
+                           for row in conn.execute(f"PRAGMA table_info({table})")}
+                if not columns:
+                    conn.execute("COMMIT")   # table absent: nothing to migrate
+                    in_txn = False
+                    return
+                for name, ddl in additions.items():
+                    if name not in columns:
+                        conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}")
+                conn.execute("COMMIT")
+                in_txn = False
+            except sqlite3.OperationalError as exc:
+                if "duplicate column name" not in str(exc):
+                    raise
+                # Another initializer won the race despite the write lock
+                # (e.g. a filesystem without working POSIX advisory locks).
+                # Roll back, re-check the TARGET schema: a complete schema is
+                # success, a real defect keeps raising.
+                try:
+                    conn.execute("ROLLBACK")
+                except Exception:
+                    pass
+                in_txn = False
+                columns = {row["name"]
+                           for row in conn.execute(f"PRAGMA table_info({table})")}
+                if all(name in columns for name in additions):
+                    return
+                raise
+            finally:
+                if in_txn:
+                    try:
+                        conn.execute("ROLLBACK")
+                    except Exception:
+                        pass
+
     def _ensure_token_schema(self) -> None:
-        columns = {row["name"] for row in self.conn.execute("PRAGMA table_info(peer_tokens)")}
-        if "token_id" not in columns:
-            self.conn.execute("ALTER TABLE peer_tokens ADD COLUMN token_id TEXT")
-        if "device_label" not in columns:
-            self.conn.execute("ALTER TABLE peer_tokens ADD COLUMN device_label TEXT")
-        if "scope" not in columns:
-            self.conn.execute("ALTER TABLE peer_tokens ADD COLUMN scope TEXT NOT NULL DEFAULT 'full'")
+        self._ensure_columns("peer_tokens", {
+            "token_id": "TEXT",
+            "device_label": "TEXT",
+            "scope": "TEXT NOT NULL DEFAULT 'full'",
+        })
         rows = self.conn.execute(
             "SELECT id,peer_id,token_hash FROM peer_tokens WHERE token_id IS NULL OR token_id=''"
         ).fetchall()
@@ -135,12 +182,21 @@ class AtalkStore:
                 raise
         self.conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_peer_tokens_token_id ON peer_tokens(token_id)")
 
+    def _ensure_notification_ack_column(self) -> None:
+        """r5 F6: databases created by intermediate federation-v0 builds have
+        federation_notifications without the durable `acked` column; add it
+        idempotently (fresh databases get it from schema.sql).  r6 #5: the
+        check + ALTER are transactional (_ensure_columns), so two processes
+        initializing the same file no longer crash the loser with
+        "duplicate column name: acked"."""
+        self._ensure_columns("federation_notifications",
+                             {"acked": "INTEGER NOT NULL DEFAULT 0"})
+
     def _ensure_peer_capability_columns(self) -> None:
-        columns = {row["name"] for row in self.conn.execute("PRAGMA table_info(peers)")}
-        if "delivery_class" not in columns:
-            self.conn.execute("ALTER TABLE peers ADD COLUMN delivery_class TEXT NOT NULL DEFAULT 'normal'")
-        if "ack_timeout_sec" not in columns:
-            self.conn.execute("ALTER TABLE peers ADD COLUMN ack_timeout_sec INTEGER NOT NULL DEFAULT 180")
+        self._ensure_columns("peers", {
+            "delivery_class": "TEXT NOT NULL DEFAULT 'normal'",
+            "ack_timeout_sec": "INTEGER NOT NULL DEFAULT 180",
+        })
 
     def set_target_acl(self, peer_id: str, allowed_targets) -> None:
         targets = list(dict.fromkeys(str(target) for target in allowed_targets))

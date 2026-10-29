@@ -4,12 +4,19 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "atalk"
-version = "0.3.0a7"
+version = "0.3.0a10"
 description = "ATalk: a small reliable message bus for AI agents (durable event log, dual ACK, Raft HA)"
 requires-python = ">=3.11"
 authors = [{name = "Gene7"}]
 license = {text = "MIT"}
 dependencies = []
+
+[project.optional-dependencies]
+# Federation is optional (r4 F1): the core package stays zero-dependency and
+# starts with federation off when the extra is not installed.  The version
+# floor matches the portable behavior-test contract (PyNaCl >= 1.5); the
+# evidence environment is pinned exactly by requirements-federation.lock.
+federation = ["pynacl>=1.5,<2"]
 
 [project.scripts]
 atalk = "atalk.cli:main"
@@ -20,7 +27,7 @@ atalk-inbox = "atalk.inbox:main"
 pythonpath = ["."]
 
 [tool.setuptools]
-packages = ["atalk"]
+packages = ["atalk", "atalk.federation"]
 
 [tool.setuptools.package-data]
 atalk = ["schema.sql"]

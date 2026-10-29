@@ -1,0 +1,154 @@
+{
+  "note": "base64url check-order negative vectors v0 (design draft v0.4.2 §4.6: canonicality before length). Generated with the frozen implementation; each case gives the raw input string, the expected byte length (expected_length), the name of the length category (length_category), the layer (layer), the check that fires first (fires: charset | mod4_length | trailing_bits | byte_length; null for valid cases) and the expected result (expect: valid or an error category). A string that is both non-canonical AND of the wrong length must report non_canonical_base64url, never a length error.",
+  "order": "charset (b64url alphabet, no padding) -> mod-4 decodable length (len % 4 != 1) -> re-encode byte-identical (zero trailing bits) -> decoded byte length == expected",
+  "cases": [
+    {
+      "name": "sig_valid_control",
+      "input": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0-Pw",
+      "expected_length": 64,
+      "length_category": "signature_length",
+      "layer": "schema",
+      "fires": null,
+      "expect": "valid",
+      "why": "canonical 86-char encoding of 64 bytes (bytes(range(64))); decodes and re-encodes byte-identical"
+    },
+    {
+      "name": "trailing_bits_wrong_length_canonicity_first",
+      "input": "AB",
+      "expected_length": 64,
+      "length_category": "signature_length",
+      "layer": "schema",
+      "fires": "trailing_bits",
+      "expect": "non_canonical_base64url",
+      "why": "round-1 probe: decodes to 1 byte with 4 nonzero trailing bits AND the wrong length; canonicality must fire first, never signature_length"
+    },
+    {
+      "name": "mod4_undecodable_wrong_length_canonicity_first",
+      "input": "A",
+      "expected_length": 64,
+      "length_category": "signature_length",
+      "layer": "schema",
+      "fires": "mod4_length",
+      "expect": "non_canonical_base64url",
+      "why": "round-1 probe: length % 4 == 1 can never decode; undecodable = non-canonical, not a length error"
+    },
+    {
+      "name": "trailing_bits_correct_length",
+      "input": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0-PB",
+      "expected_length": 64,
+      "length_category": "signature_length",
+      "layer": "schema",
+      "fires": "trailing_bits",
+      "expect": "non_canonical_base64url",
+      "why": "length is the canonical 86, but the final sextet leaves 4 nonzero trailing bits"
+    },
+    {
+      "name": "charset_padding",
+      "input": "AP8=",
+      "expected_length": 2,
+      "length_category": "signature_length",
+      "layer": "schema",
+      "fires": "charset",
+      "expect": "non_canonical_base64url",
+      "why": "padding '=' is outside the canonical alphabet"
+    },
+    {
+      "name": "charset_foreign_alphabet",
+      "input": "A+/",
+      "expected_length": 64,
+      "length_category": "signature_length",
+      "layer": "schema",
+      "fires": "charset",
+      "expect": "non_canonical_base64url",
+      "why": "'+' and '/' are standard-base64 characters; foreign alphabet AND wrong length — charset fires first"
+    },
+    {
+      "name": "empty_string",
+      "input": "",
+      "expected_length": 64,
+      "length_category": "signature_length",
+      "layer": "schema",
+      "fires": "charset",
+      "expect": "non_canonical_base64url"
+    },
+    {
+      "name": "canonical_but_wrong_length_sig",
+      "input": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+      "expected_length": 64,
+      "length_category": "signature_length",
+      "layer": "schema",
+      "fires": "byte_length",
+      "expect": "signature_length",
+      "why": "a perfectly canonical decodable string (32 bytes) whose byte count != expected: pure length error"
+    },
+    {
+      "name": "canonical_8char_expected_5",
+      "input": "AAAAAAAA",
+      "expected_length": 5,
+      "length_category": "signature_length",
+      "layer": "schema",
+      "fires": "byte_length",
+      "expect": "signature_length",
+      "why": "canonical 6-byte string, 5 requested: pure length error (mirrors the round-1 unit case)"
+    },
+    {
+      "name": "both_noncanonical_and_wrong_length_sig_path",
+      "input": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHhB",
+      "expected_length": 64,
+      "length_category": "signature_length",
+      "layer": "schema",
+      "fires": "trailing_bits",
+      "expect": "non_canonical_base64url",
+      "why": "nonzero trailing bits (2) AND 32 != 64 bytes: the canonicality check wins on the signature path"
+    },
+    {
+      "name": "key_valid_control",
+      "input": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+      "expected_length": 32,
+      "length_category": "public_key_length",
+      "layer": "registry",
+      "fires": null,
+      "expect": "valid",
+      "why": "canonical 43-char encoding of 32 bytes; the public-key path shares decode_strict"
+    },
+    {
+      "name": "key_trailing_bits_wrong_length",
+      "input": "AB",
+      "expected_length": 32,
+      "length_category": "public_key_length",
+      "layer": "registry",
+      "fires": "trailing_bits",
+      "expect": "non_canonical_base64url",
+      "why": "same order on the key path: canonicality before public_key_length"
+    },
+    {
+      "name": "key_mod4_undecodable",
+      "input": "A",
+      "expected_length": 32,
+      "length_category": "public_key_length",
+      "layer": "registry",
+      "fires": "mod4_length",
+      "expect": "non_canonical_base64url"
+    },
+    {
+      "name": "key_trailing_bits_correct_length",
+      "input": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHhB",
+      "expected_length": 32,
+      "length_category": "public_key_length",
+      "layer": "registry",
+      "fires": "trailing_bits",
+      "expect": "non_canonical_base64url",
+      "why": "canonical 43-char length, but the final sextet leaves 2 nonzero trailing bits"
+    },
+    {
+      "name": "key_canonical_but_wrong_length",
+      "input": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0-Pw",
+      "expected_length": 32,
+      "length_category": "public_key_length",
+      "layer": "registry",
+      "fires": "byte_length",
+      "expect": "public_key_length",
+      "why": "canonical 64-byte string where 32 bytes are expected: pure length error on the key path"
+    }
+  ]
+}

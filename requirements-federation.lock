@@ -1,0 +1,56 @@
+# Federation EVIDENCE-ENVIRONMENT ARTIFACT — NOT a portable dependency lock.
+#
+# This file records the exact artifacts the round-1 federation vectors were
+# generated with and that the evidence-environment assertions assume
+# (python==3.11.0rc1, PyNaCl==1.6.2; libsodium exposes no version symbol
+# through the PyNaCl 1.6.2 ABI and is pinned by these wheels).  It is NOT a
+# portable dependency pin: do NOT use it to install on other platforms or to
+# reproduce the runtime environment elsewhere.  The portable contract is the
+# optional extra in pyproject.toml (pynacl>=1.5,<2).
+#
+# FROZEN_VERSIONS in atalk/federation/ed25519strict.py is runtime-collected
+# context, not a lock; this file is.  Behavioral tests must pass on any
+# Python >= 3.11 / PyNaCl >= 1.5 and assert no versions; the exact
+# evidence-environment assertions live behind ATALK_FED_EVIDENCE_ENV=1 in
+# tests/test_federation_review_fixes.py (EvidenceEnvironmentConsistencyTest).
+#
+# Evidence host: Linux x86_64, glibc >= 2.34, python 3.11.0rc1.
+# Recorded platforms (both verified, see below): manylinux x86_64 AND
+# manylinux aarch64, CPython 3.11.  NOT covered: musl, macOS, Windows,
+# other CPython minor versions (cffi wheels are cp3XX-specific; pynacl is
+# cp38-abi3 and resolves the same on 3.11), PyPy.
+#
+# Wheel hashes below were cross-checked two ways against the PyPI release
+# metadata for pynacl 1.6.2 (r5 #7) and cffi 2.1.1 / pycparser 3.11 (r7):
+# (1) https://pypi.org/pypi/<pkg>/<ver>/json urls[].digests.sha256,
+# (2) an actual `pip download` of each wheel file followed by sha256sum.
+# Both give the same digests, recorded verbatim:
+#
+#   pynacl-1.6.2-cp38-abi3-manylinux_2_34_x86_64.whl    (the evidence host's
+#     platform; resolved by pip at lock-generation time)
+#   pynacl-1.6.2-cp38-abi3-manylinux_2_34_aarch64.whl   (ARM64; recorded in
+#     r5 #7 so an aarch64 install can be hash-checked — this record does NOT
+#     make the file a portable lock)
+#   cffi-2.1.1-cp311-cp311-manylinux2014_x86_64.whl     (PyNaCl's install
+#     dependency on the evidence host; the version actually present in the
+#     evidence venv)
+#   cffi-2.1.1-cp311-cp311-manylinux2014_aarch64.whl    (ARM64, python 3.11)
+#   pycparser-3.11-py3-none-any.whl                     (cffi's dependency;
+#     universal wheel, one hash for every platform — still NOT a portable
+#     lock, only the evidence-environment record)
+pynacl==1.6.2 \
+    --hash=sha256:c8a231e36ec2cab018c4ad4358c386e36eede0319a0c41fed24f840b1dac59f6 \
+    --hash=sha256:26bfcd00dcf2cf160f122186af731ae30ab120c18e8375684ec2670dccd28130
+cffi==2.1.1 \
+    --hash=sha256:34e261f78cb6ceaaa36f42f2613f4380d94d9c759a9c73c769ee6e0247364632 \
+    --hash=sha256:3311ed60d36f83378794e1009ac6258bafbf81f7888b4caa7b35a521e3f95813
+pycparser==3.11 \
+    --hash=sha256:51d5a8ba2be0bbe440b99d2112604c95bbbc3c2748a64260186c541e1729cd80
+# Originally generated with: .venv/bin/pip download pynacl==1.6.2 --no-deps -d /tmp/lockdl
+# aarch64 digest added in r5 #7 (pip download --platform manylinux_2_34_aarch64
+# and PyPI metadata, both matching the recorded value exactly).
+# cffi/pycparser added in r7 the same two ways: cp311 x86_64 downloaded
+# natively, cp311 aarch64 and py3-none-any via --platform/--python-version;
+# every digest matches the PyPI metadata for the exact filenames listed
+# above.  The evidence venv that produced the round-1 vectors runs
+# pynacl 1.6.2 + cffi 2.1.1 + pycparser 3.11 on CPython 3.11.
